@@ -68,11 +68,12 @@ func (s *Sequencer) tick() time.Time {
 	return s.clock.Tick()
 }
 
-// NewSequencer bootstraps a fresh archive over u, storing the key-carrying self
-// contributor and minting the empty contribution/branches claim whose id is the
-// archive head k₀ (foundation §Ranke-Archive), bookmarked at index 0 of the list loc
-// names. A reproducible run passes a seed derived from its own fixture, keeping
-// "same (seed, spec) → identical ids" true of the bookmark slots too.
+// NewSequencer bootstraps over u: it stores the key-carrying self contributor and
+// appends the empty contribution/branches claim whose id is the head k₀ to the list
+// loc names, at its NEXT FREE slot — so over a list that already holds entries, a
+// second and empty head lands above the archive there (foundation §Ranke-Archive).
+// A reproducible run passes a seed of its own, keeping "same (seed, spec) →
+// identical ids" true of the bookmark slots too.
 func NewSequencer(ctx context.Context, u ranke.Universe, loc ranke.BookmarkLocator, self ranke.Contributor, clock Clock) (*Sequencer, error) {
 	if u == nil || self == nil || clock == nil {
 		return nil, errNilArg

@@ -81,10 +81,11 @@ type receipt struct{ head ranke.Id }
 // Head returns the archive head the merge advanced to.
 func (r receipt) Head() ranke.Id { return r.head }
 
-// NewSequencer bootstraps a fresh archive over u: it stores self and mints the
-// empty branch table whose id is the archive head k₀ (foundation §Ranke-Archive),
-// bookmarked at index 0 of the list loc names. self must carry a signing key, which
-// every branch table and every bookmark it writes is signed with.
+// NewSequencer bootstraps over u: it stores self and appends the empty branch table
+// whose id is the head k₀ to the list loc names, at its NEXT FREE slot — so over a
+// list that already holds entries, a second and empty head lands above the archive
+// there (foundation §Ranke-Archive). self must carry the signing key every branch
+// table and every bookmark it writes is signed with.
 func NewSequencer(ctx context.Context, u ranke.Universe, loc ranke.BookmarkLocator, self ranke.Contributor, clock Clock) (*Sequencer, error) {
 	if u == nil || self == nil || clock == nil {
 		return nil, errNilArg
