@@ -48,6 +48,9 @@ func newSequencer(t *testing.T, ctx context.Context) (*devseq.Sequencer, ranke.C
 	op := operator(t, ctx, clk.Tick())
 	seq, err := devseq.NewSequencer(ctx, u, ranke.Seed([]byte(op.ID().String())), op, clk)
 	require.NoError(t, err)
+	require.True(t, seq.InGenesis(), "an empty list is an archive not yet founded")
+	_, err = helpers.Found(ctx, seq, "dev")
+	require.NoError(t, err)
 	return seq, op, clk
 }
 

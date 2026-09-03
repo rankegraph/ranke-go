@@ -67,6 +67,12 @@ func Generate(ctx context.Context, u ranke.Universe, spec Spec) (*Manifest, erro
 	if err != nil {
 		return nil, fmt.Errorf("%w: sequencer: %w", errGenerate, err)
 	}
+	// The archive's first contributor, keyed off the spec seed so the whole run stays
+	// reproducible. It is registered under the operator, where the generated
+	// contributors below are initial claims of their own.
+	if _, err := helpers.Found(ctx, seq, "generator/"+strconv.FormatInt(spec.Seed, 10)); err != nil {
+		return nil, fmt.Errorf("%w: found: %w", errGenerate, err)
+	}
 
 	b := &builder{ctx: ctx, u: u, spec: spec, clock: clock}
 	b.contributors(op)

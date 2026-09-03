@@ -23,6 +23,10 @@ var (
 	// ErrBranchNotFound: the archive holds no branch of that name. Also matches
 	// ErrNotFound, so a caller may read it either way.
 	ErrBranchNotFound = errors.New("ranke.Archive.GetBranch: branch not found")
+	// ErrSequencerGenesis: the bookmark list holds no entry, so this archive does
+	// not exist yet and every operation on it waits for Found. A caller branches on
+	// Sequencer.InGenesis rather than on this error.
+	ErrSequencerGenesis = errors.New("ranke.Sequencer: the archive awaits its first contributor (Found)")
 
 	// --- Id ---
 	errInvalidId     = errors.New("ranke: invalid id")

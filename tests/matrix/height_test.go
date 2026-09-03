@@ -86,6 +86,9 @@ func buildRevisions(ctx context.Context, u ranke.Universe) (revisions, error) {
 	if err != nil {
 		return revisions{}, err
 	}
+	if _, err := helpers.Found(ctx, seq, "height"); err != nil {
+		return revisions{}, err
+	}
 
 	note := func(body string) (ranke.Claim, error) {
 		return ranke.NewClaim(ranke.TypeSource("note"), op).

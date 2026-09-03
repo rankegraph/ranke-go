@@ -132,6 +132,8 @@ func runConcurrentWriters(t *testing.T, u ranke.Universe, sr sequencerRow, n int
 	op := operatorFor(t, ctx, clk.Tick())
 	seq, err := sr.New(ctx, u, op, clk)
 	require.NoError(t, err)
+	_, err = helpers.Found(ctx, seq, "concurrency/"+sr.Name)
+	require.NoError(t, err)
 
 	ids := make([]ranke.Id, n)
 	errs := make([]error, n)
