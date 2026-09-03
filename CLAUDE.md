@@ -179,6 +179,12 @@ there to prevent.
 - Comments are short. Two lines is already long; a 10-line block is wrong.
   Say why, not what.
 - Say what a thing IS, not what it is not.
+- Vocabulary comes from the papers. They draw on historical science, archival
+  theory and librarianship, so a term borrowed from software fashion relabels the
+  concept: the Sequencer *issues* a branch table, it does not mint one, and a
+  `contribution/delete` is a *limiting claim*, not a tombstone. Say what the
+  glossary says; where the papers have no word, use a plain one, never a borrowed
+  one.
 - No `fmt.Errorf` in the codebase. Errors are static sentinels (`errors.New`,
   one per fixed condition, collected per package) composed lazily — in package
   ranke via `wrap` / `withDetail` / `wrapDetail`. `errors.Join(sentinel, ...)`
