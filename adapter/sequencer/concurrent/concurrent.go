@@ -24,6 +24,8 @@ var (
 	errNoSigningKey        = errors.New("concurrent.NewSequencer: self contributor carries no signing key")
 	errNoBookmarks         = errors.New("concurrent.NewSequencer: universe holds no 𝒰_hist to bookmark the head in")
 	errNewSequencer        = errors.New("concurrent.NewSequencer")
+	errFound               = errors.New("concurrent.Sequencer.Found")
+	errFounded             = errors.New("concurrent.Sequencer.Found: this list already records an archive, and genesis happens once")
 	errSequencer           = errors.New("concurrent.Sequencer")
 	errForeignContribution = errors.New("concurrent.Sequencer.Merge: contribution was not opened by this Sequencer")
 )
@@ -81,9 +83,8 @@ type receipt struct{ head ranke.Id }
 // Head returns the archive head the merge advanced to.
 func (r receipt) Head() ranke.Id { return r.head }
 
-// NewSequencer bootstraps a fresh archive over u: it stores self and mints the
-// empty branch table whose id is the archive head k₀ (foundation §Ranke-Archive),
-// bookmarked at index 0 of the list loc names. self must carry a signing key, which
+// NewSequencer opens the list loc names and takes its state from it, writing nothing:
+// an archive comes into being through Found alone. self must carry the signing key
 // every branch table and every bookmark it writes is signed with.
 func NewSequencer(ctx context.Context, u ranke.Universe, loc ranke.BookmarkLocator, self ranke.Contributor, clock Clock) (*Sequencer, error) {
 	if u == nil || self == nil || clock == nil {
@@ -107,26 +108,85 @@ func NewSequencer(ctx context.Context, u ranke.Universe, loc ranke.BookmarkLocat
 		committed: map[string]struct{}{},
 	}
 
-	// Stored so the branch-table claims attributed to it resolve.
-	if err := s.u.PutClaims(ctx, []ranke.Claim{self}); err != nil {
-		return nil, fmt.Errorf("%w: store contributor: %w", errNewSequencer, err)
+	if err := s.adopt(ctx); err != nil {
+		return nil, err
 	}
-	// Empty branch table → archive head k₀, bookmark index 0.
+	return s, nil
+}
+
+// adopt reads what the list records: the head its top bookmark names, and each
+// branch's head from the archive there — foldBranch folds onto those, so a resume
+// lacking them would republish a branch as its new claims alone. Empty is genesis.
+func (s *Sequencer) adopt(ctx context.Context) error {
+	latest, err := s.marks.Latest(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: read the bookmark list: %w", errNewSequencer, err)
+	}
+	s.head = latest.Head()
+	if s.head == nil {
+		return nil
+	}
+	arc, err := ranke.NewArchive(ctx, s.u, s.head)
+	if err != nil {
+		return fmt.Errorf("%w: open the archive at %s: %w", errNewSequencer, s.head, err)
+	}
+	branches, err := arc.GetBranches(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: read the branches at %s: %w", errNewSequencer, s.head, err)
+	}
+	for _, b := range branches {
+		s.heads[b.Name()] = b.Head()
+	}
+	s.markCommitted(s.self.ID(), s.head)
+	return nil
+}
+
+// InGenesis reports that no archive exists here yet, so Found is the one operation
+// available (`ranke.ErrSequencerGenesis`).
+func (s *Sequencer) InGenesis() bool { return s.currentHead() == nil }
+
+// Found creates the archive: the Sequencer's own claim, the first contributor under
+// it, the empty table k₀, and the bookmark that publishes it. Everything before that
+// bookmark is content-addressed and outside any closure, so a crash part-way leaves
+// no archive and a retry writes the same ids (paper 02 step 7).
+func (s *Sequencer) Found(ctx context.Context, pubkey []byte) (ranke.Claim, error) {
+	s.seq.Lock()
+	defer s.seq.Unlock()
+	if s.head != nil {
+		return nil, ranke.WithDetail(errFounded, s.head.String())
+	}
+	// The Sequencer's own claim first, so the contributor below it resolves.
+	if err := s.u.PutClaims(ctx, []ranke.Claim{s.self}); err != nil {
+		return nil, fmt.Errorf("%w: store contributor: %w", errFound, err)
+	}
+	first, err := ranke.NewClaim(ranke.NodeContributor, s.self).
+		WithInlineContent(pubkey).
+		WithEncoding(ranke.EncodingOctetStream).
+		WithCreatedAt(s.clock.Tick()).
+		WithAutoHeight(ctx, s.u).
+		Sign()
+	if err != nil {
+		return nil, fmt.Errorf("%w: sign the first contributor: %w", errFound, err)
+	}
+	if err := s.u.PutClaims(ctx, []ranke.Claim{first}); err != nil {
+		return nil, fmt.Errorf("%w: store the first contributor: %w", errFound, err)
+	}
+	// Empty branch table → archive head k₀, published as bookmark 0.
 	bt0, err := s.mintBranchTable(ctx, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.marks.Append(ctx, self, bt0.ID()); err != nil {
-		return nil, fmt.Errorf("%w: bookmark k₀: %w", errNewSequencer, err)
+	if _, err := s.marks.Append(ctx, s.self, bt0.ID()); err != nil {
+		return nil, fmt.Errorf("%w: bookmark k₀: %w", errFound, err)
 	}
 	s.head = bt0.ID()
-	s.markCommitted(self.ID(), bt0.ID())
+	s.markCommitted(s.self.ID(), first.ID(), bt0.ID())
 	// Index k₀, so a layer answering membership from its own index holds the operator,
 	// which sits on the spine.
 	if err := s.u.Tag(ctx, s.head); err != nil {
-		return nil, fmt.Errorf("%w: tag: %w", errNewSequencer, err)
+		return nil, fmt.Errorf("%w: tag: %w", errFound, err)
 	}
-	return s, nil
+	return first, nil
 }
 
 // GetContributor returns the contributor branch advances are signed with.
@@ -143,9 +203,14 @@ func (s *Sequencer) currentHead() ranke.Id {
 }
 
 // GetArchive returns the immutable snapshot RA_k at the current head, pinned to
-// the head as read — so it is safe while contributions are in flight.
+// the head as read — so it is safe while contributions are in flight. Pre-genesis it
+// refuses: there is no head, and an empty archive would be a fiction.
 func (s *Sequencer) GetArchive(ctx context.Context) (ranke.Archive, error) {
-	return ranke.NewArchive(ctx, s.u, s.currentHead())
+	head := s.currentHead()
+	if head == nil {
+		return nil, ranke.WithDetail(ranke.ErrSequencerGenesis, "GetArchive")
+	}
+	return ranke.NewArchive(ctx, s.u, head)
 }
 
 // NewContribution is step 1 and the only work the sequencing thread does per
@@ -153,6 +218,9 @@ func (s *Sequencer) GetArchive(ctx context.Context) (ranke.Archive, error) {
 func (s *Sequencer) NewContribution(ctx context.Context, opts ...ranke.ContributionOption) (ranke.Contribution, error) {
 	s.seq.Lock()
 	defer s.seq.Unlock()
+	if s.head == nil {
+		return nil, ranke.WithDetail(ranke.ErrSequencerGenesis, "NewContribution")
+	}
 	return &contribution{
 		s:           s,
 		baseHead:    s.head,
@@ -169,6 +237,9 @@ func (s *Sequencer) Merge(ctx context.Context, mc ranke.MergableContribution) (r
 	m, ok := mc.(*mergable)
 	if !ok || m.s != s {
 		return nil, errForeignContribution
+	}
+	if s.currentHead() == nil {
+		return nil, ranke.WithDetail(ranke.ErrSequencerGenesis, "Merge")
 	}
 	// The queue entry takes its own map of the branches the contribution named.
 	heads := make(map[string][]ranke.Id, len(m.branches))

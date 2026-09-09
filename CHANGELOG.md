@@ -22,6 +22,12 @@ What each release changed for someone depending on this repository.
   Universe.
 - `MintSeed()` — a fresh 128-bit list seed (`V-BMENV`), for whoever founds a list and
   keeps the value.
+- `Sequencer.InGenesis()` and `Sequencer.Found(ctx, pubkey)`. An archive now comes
+  into being through `Found` alone, as one operation writing the Sequencer's initial
+  claim, the first contributor under it, the empty branch table k₀ and its bookmark.
+  It returns that contributor's claim — `V-SIG` lets only the Sequencer key sign one,
+  so the caller hands over a public key and keeps its private half. A second call is
+  refused, and `ErrSequencerGenesis` answers every other operation until it succeeds.
 
 ### Changed
 
@@ -47,6 +53,12 @@ What each release changed for someone depending on this repository.
 
 ### Fixed
 
+- A restart reopens the archive its bookmark list records. Both `NewSequencer`
+  implementations used to mint k₀ and append it unconditionally, so a relaunch over a
+  persistent 𝒰_hist published a second and empty head above the real archive and left
+  it unreachable. The constructor now writes nothing and takes its state from the
+  list, branch heads included — without those a resumed merge would republish a
+  branch as its new claims alone, dropping what it reached before.
 - A comparison on a time field is held to one spelling (`R-QTIMEOP`): a `V-TIME`
   timestamp on `created_at`, `delete_by`, `pubkey_valid_from` and
   `pubkey_expires_after`, an EDTF Level 1 value on `dated`, and `ErrQueryTimeOperand`

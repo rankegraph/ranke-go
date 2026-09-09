@@ -225,6 +225,11 @@ func main() {
 	// The list seed is alice's own id: deterministic, so a rerun lands on the same
 	// id_seq slots and the bundle stays byte-identical.
 	seq := must(devseq.NewSequencer(ctx, u, ranke.Seed([]byte(alice.ID().String())), alice, s))
+	// Found brings the archive into being and registers its first contributor under
+	// the Sequencer, which is the only key that can sign one in (`V-SIG`): bob hands
+	// over a public key and keeps its private half.
+	bobKey := must(ranke.LoadPrivateKey(helpers.KeyPath("bob.pem")))
+	must(seq.Found(ctx, bobKey.Pubkey))
 	helpers.WriteBookmarkId(seq)
 	head := must(testhelpers.Contribute(ctx, seq, "main", []ranke.Claim{
 		emailApples, emailFamily, summary,

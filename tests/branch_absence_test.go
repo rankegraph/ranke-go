@@ -27,6 +27,8 @@ func TestGetBranchAbsenceIsMatchable(t *testing.T) {
 	u := mem.New()
 	seq, err := devseq.NewSequencer(ctx, u, ranke.Seed([]byte(self.ID().String())), self, clock)
 	require.NoError(t, err, "NewSequencer")
+	_, err = helpers.Found(ctx, seq, "branch-absence")
+	require.NoError(t, err, "Found")
 
 	em, err := ranke.NewClaim(ranke.TypeSource("note"), self).
 		WithInlineContent([]byte("a note")).
@@ -75,6 +77,8 @@ func TestAbsentBranchStillRefusesAContribution(t *testing.T) {
 	u := mem.New()
 	seq, err := devseq.NewSequencer(ctx, u, ranke.Seed([]byte(self.ID().String())), self, clock)
 	require.NoError(t, err, "NewSequencer")
+	_, err = helpers.Found(ctx, seq, "branch-absence")
+	require.NoError(t, err, "Found")
 
 	arc, err := seq.GetArchive(ctx)
 	require.NoError(t, err, "GetArchive")

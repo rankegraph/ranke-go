@@ -64,6 +64,9 @@ func newFixture(t *testing.T, ctx context.Context, backend Backend) *fixture {
 	require.NoError(t, err, "open backend")
 	seq, err := devseq.NewSequencer(ctx, u, ranke.Seed([]byte(self.ID().String())), self, clock)
 	require.NoError(t, err, "stand up dev Sequencer")
+	require.True(t, seq.InGenesis(), "a fresh 𝒰_hist is an archive not yet founded")
+	_, err = helpers.Found(ctx, seq, "integration")
+	require.NoError(t, err, "found the archive")
 	return &fixture{ctx: ctx, u: u, seq: seq, clock: clock, self: self}
 }
 

@@ -6,6 +6,8 @@ package helpers
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
 
 	"github.com/rankegraph/ranke-go"
 )
@@ -42,4 +44,28 @@ func Contribute(ctx context.Context, seq ranke.Sequencer, branch string, claims 
 		return nil, err
 	}
 	return r.Head(), nil
+}
+
+// FoundedKey is the deterministic key a label names, so a fixture's first
+// contributor is the same identity on every run and across backends. Ed25519 keys
+// come from a seed, so a fixed label is a fixed key.
+func FoundedKey(label string) ed25519.PrivateKey {
+	seed := sha256.Sum256([]byte("ranke-test-first-contributor:" + label))
+	return ed25519.NewKeyFromSeed(seed[:])
+}
+
+// Found brings seq's archive into being under the key label names, which every
+// operation but Found itself now requires. It returns the first contributor,
+// resolved with its own private key so a test may contribute as it.
+func Found(ctx context.Context, seq ranke.Sequencer, label string) (ranke.Contributor, error) {
+	priv := FoundedKey(label)
+	pubkey, err := ranke.EncodePublicKey(priv.Public())
+	if err != nil {
+		return nil, err
+	}
+	first, err := seq.Found(ctx, pubkey)
+	if err != nil {
+		return nil, err
+	}
+	return first.AsContributor(ctx, nil, priv)
 }

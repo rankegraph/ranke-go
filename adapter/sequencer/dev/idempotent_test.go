@@ -26,6 +26,8 @@ func newSeqWithUniverse(t *testing.T, ctx context.Context) (*devseq.Sequencer, r
 	op := operator(t, ctx, clk.Tick())
 	seq, err := devseq.NewSequencer(ctx, u, ranke.Seed([]byte(op.ID().String())), op, clk)
 	require.NoError(t, err)
+	_, err = helpers.Found(ctx, seq, "dev-idempotent")
+	require.NoError(t, err)
 	return seq, u, op, clk
 }
 

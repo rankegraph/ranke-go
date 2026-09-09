@@ -16,6 +16,12 @@ import "context"
 // An implementation is safe to drive from several goroutines. Which one a caller
 // holds decides how fast that goes, never whether it is allowed.
 type Sequencer interface {
+	// InGenesis reports no archive here yet, leaving Found the one operation.
+	InGenesis() bool
+	// Found creates the archive, once: the Sequencer's initial claim, the first
+	// contributor under it carrying pubkey, the empty table k₀, its bookmark. It
+	// returns that contributor's claim, which `V-SIG` lets only the Sequencer sign.
+	Found(ctx context.Context, pubkey []byte) (Claim, error)
 	// GetArchive returns the current immutable snapshot RA_k.
 	GetArchive(ctx context.Context) (Archive, error)
 	// GetContributor returns the contributor the Sequencer attests branch

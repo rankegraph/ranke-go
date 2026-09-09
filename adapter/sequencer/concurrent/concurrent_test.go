@@ -64,6 +64,9 @@ func newFixture(t *testing.T, ctx context.Context) *fixture {
 	op := operator(t, ctx, clk.Tick())
 	seq, err := concseq.NewSequencer(ctx, u, ranke.Seed([]byte(op.ID().String())), op, clk)
 	require.NoError(t, err)
+	require.True(t, seq.InGenesis(), "an empty list is an archive not yet founded")
+	_, err = helpers.Found(ctx, seq, "concurrent")
+	require.NoError(t, err)
 	// A second, independent view over the same bookmark list, reached the way any
 	// external reader would: from one bookmark id, never discovered (paper §Backup).
 	marks, err := ranke.OpenBookmarks(ctx, u, seq.BookmarkId())

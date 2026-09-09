@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rankegraph/ranke-go"
+	"github.com/rankegraph/ranke-go/tests/helpers"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,6 +48,8 @@ func newTestSequencer(t *testing.T, ctx context.Context) (*Sequencer, ranke.Univ
 	require.NoError(t, err)
 
 	s, err := NewSequencer(ctx, u, ranke.Seed([]byte(op.ID().String())), op, clk)
+	require.NoError(t, err)
+	_, err = helpers.Found(ctx, s, "groupcommit")
 	require.NoError(t, err)
 	return s, u, s.marks, op, clk
 }
