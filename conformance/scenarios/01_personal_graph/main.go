@@ -16,7 +16,7 @@
 //
 //	conformance/scenarios/01_personal_graph/run.sh
 
-// package: main / scenario
+// package: conformance/scenarios/01_personal_graph / scenario
 // type:    cmd
 // job:     build & persist the scenario-01 personal-graph data bundle
 // limits:  doesn't verify variant reproductions; that's the run.sh harness (-> conformance/helpers)

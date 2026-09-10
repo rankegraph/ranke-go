@@ -22,7 +22,7 @@
 // themselves evidence") and §3.5 (conviction values). A referencing
 // claim declares its Height (§4.1): 1 + the max reference height.
 
-// package: main / scenario
+// package: conformance/scenarios/03_agent_corrects_agent / scenario
 // type:    cmd
 // job:     build & persist the scenario-03 agent-corrects-agent data bundle
 // limits:  doesn't verify variant reproductions; that's the run.sh harness (-> conformance/helpers)

@@ -9,6 +9,7 @@ package dev
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/rankegraph/ranke-go"
@@ -132,7 +133,10 @@ func (c *contribution) CompleteAndVerify(ctx context.Context) (ranke.VerifiedCon
 			return nil, fmt.Errorf("%w: verify: %w", errSequencer, err)
 		}
 		if fs := run.Failures(); len(fs) > 0 {
-			return nil, fmt.Errorf("%w: verify: %d failure(s), first: %v", errSequencer, len(fs), fs[0])
+			// The Failure travels as the cause, so a caller matches the rule it broke
+			// with errors.Is and recovers the claim with errors.As.
+			return nil, ranke.WrapDetail(errSequencer,
+				"verify: "+strconv.Itoa(len(fs))+" failure(s), first", fs[0])
 		}
 
 		// Deletion leaves an explained gap where a claim's bytes were, and its edges with

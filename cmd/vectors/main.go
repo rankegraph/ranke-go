@@ -1,4 +1,4 @@
-// package: main / vectors
+// package: cmd/vectors / cli
 // type:    cmd
 // job:     generates the cross-implementation reference artifacts — a conformance graph of claim
 // records, the archive's bookmark list, plus records that must be rejected, described by a manifest

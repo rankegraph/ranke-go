@@ -1,4 +1,4 @@
-// package: main / cli
+// package: cmd/scenariodoc / cli
 // type:    cmd
 // job:     regenerate conformance/scenarios/*/scenario.md from each scenario's main.go comments
 // limits:  doesn't run scenarios; only extracts their doc comments (-> conformance/scenarios)

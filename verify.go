@@ -147,7 +147,7 @@ func runVerification(ctx context.Context, roots []Id, u Universe, cfg *verifyCon
 			if errors.Is(err, ErrNotFound) {
 				// Deleted: explained by the edge that reached it, or held for a mark.
 				if !cur.dated {
-					gaps[k] = Failure{ID: cur.id, Depth: cur.depth, Err: Wrap(errUnexplainedGap, err)}
+					gaps[k] = Failure{ID: cur.id, Depth: cur.depth, Err: Wrap(ErrUnexplainedGap, err)}
 				}
 				continue
 			}
@@ -408,7 +408,7 @@ func keyBound(signer Claim, field string) (*time.Time, error) {
 	}
 	t, err := parseRFC3339Nano(v)
 	if err != nil {
-		return nil, WrapDetail(errKeyWindowField, field+"="+v, err)
+		return nil, WrapDetail(ErrKeyWindowField, field+"="+v, err)
 	}
 	return &t, nil
 }
@@ -458,7 +458,7 @@ func ruleBranchTableReference(ctx context.Context, e Edge, t *claimUnderVerifica
 		return err
 	}
 	if ref.Node().Type() == NodeBranches {
-		return WithDetail(errRefsBranchTable, t.claim.Node().Type()+" → "+e.Reference().String())
+		return WithDetail(ErrRefsBranchTable, t.claim.Node().Type()+" → "+e.Reference().String())
 	}
 	return nil
 }
@@ -554,7 +554,7 @@ func resolveSigner(ctx context.Context, c Claim, u Universe) (Claim, error) {
 	}
 	cc, err := GetClaim(ctx, u, target)
 	if err != nil {
-		return nil, WrapDetail(errContributorUnresolved, target.String(), err)
+		return nil, WrapDetail(ErrContributorUnresolved, target.String(), err)
 	}
 	return cc, nil
 }
@@ -564,7 +564,7 @@ func resolveClaimPubkey(ctx context.Context, signer Claim, own bool, u Universe)
 	rdr, err := signer.GetContent(ctx, u)
 	if err != nil {
 		if !own {
-			return nil, WrapDetail(errContributorUnresolved, signer.ID().String(), err)
+			return nil, WrapDetail(ErrContributorUnresolved, signer.ID().String(), err)
 		}
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-// package: main / vectors_bookmarks
+// package: cmd/vectors / bookmarks
 // type:    cmd
 // job:     the 𝒰_hist cases — one valid bookmark list every implementation must open, plus a record
 // per rule a bookmark can break: its envelope, its signature, its slot, its k, and its list's

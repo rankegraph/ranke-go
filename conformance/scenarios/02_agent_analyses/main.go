@@ -18,7 +18,7 @@
 // via a derivation/source edge). A referencing claim declares its
 // Height (§4.1): 1 + the max height of everything it points at.
 
-// package: main / scenario
+// package: conformance/scenarios/02_agent_analyses / scenario
 // type:    cmd
 // job:     build & persist the scenario-02 agent-analyses data bundle
 // limits:  doesn't verify variant reproductions; that's the run.sh harness (-> conformance/helpers)

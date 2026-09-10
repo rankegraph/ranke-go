@@ -1,4 +1,4 @@
-// package: main / cli
+// package: cmd/ranke / cli
 // type:    cmd
 // job:     read-only CLI to inspect filesystem-backed Ranke-Graph archives
 // limits:  no mutation commands; building claims lives in tests + downstream apps (-> tests)

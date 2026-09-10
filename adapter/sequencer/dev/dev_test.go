@@ -94,6 +94,30 @@ func TestInvalidContributionDenied(t *testing.T) {
 		"a denied contribution must not advance the archive head")
 }
 
+// TestDeniedContributionNamesTheRule: a contribution the verifier refuses carries the
+// rule it broke and the claim that broke it, so a client branches on the rule rather
+// than reading the message.
+func TestDeniedContributionNamesTheRule(t *testing.T) {
+	ctx := context.Background()
+	seq, op, clk := newSequencer(t, ctx)
+
+	bad, err := ranke.NewClaim(ranke.TypeSource("note"), op).
+		WithInlineContent([]byte("body")).
+		WithEncoding(ranke.EncodingPlain).
+		WithHeight(99). // its lone contributor edge fixes 1
+		WithCreatedAt(clk.Tick()).
+		Sign()
+	require.NoError(t, err, "the claim seals; height is the verifier's to judge")
+
+	_, err = helpers.Contribute(ctx, seq, "main", []ranke.Claim{bad})
+	require.Error(t, err)
+	require.ErrorIs(t, err, ranke.ErrHeightMismatch, "the rule reaches the caller")
+
+	var f ranke.Failure
+	require.ErrorAs(t, err, &f, "and so does the failure")
+	require.True(t, f.ID.Equal(bad.ID()), "naming the claim that broke it")
+}
+
 // TestValidContributionAccepted is the positive control: a well-formed
 // contribution whose closure resolves is verified and merged, and the head
 // advances. Without this, TestInvalidContributionDenied could pass by denying

@@ -132,15 +132,15 @@ var (
 	errVerify                = errors.New("ranke.verify")
 	ErrKeyNotYetValid        = errors.New("ranke.verify: claim is dated before its contributor key's pubkey_valid_from")
 	ErrKeyExpired            = errors.New("ranke.verify: claim is dated after its contributor key's pubkey_expires_after")
-	errKeyWindowField        = errors.New("ranke.verify: contributor key validity bound is not RFC 3339")
-	errContributorUnresolved = errors.New("ranke.verify: contributor claim unresolved")
+	ErrKeyWindowField        = errors.New("ranke.verify: contributor key validity bound is not RFC 3339")
+	ErrContributorUnresolved = errors.New("ranke.verify: contributor claim unresolved")
 	errHeightResolve         = errors.New("ranke.NewClaim: resolve the references' heights")
 	ErrDeleteByNotCopied     = errors.New("ranke.verify: an edge must carry exactly the delete_by its referenced claim declares")
 	ErrStructureNotDeletable = errors.New("ranke: a contribution/* claim carries the graph's structure and its own identity, so it takes no delete_by")
-	errHeightMismatch        = errors.New("ranke.verify: claim height ≠ 1 + max(reference heights)")
+	ErrHeightMismatch        = errors.New("ranke.verify: claim height ≠ 1 + max(reference heights)")
 	ErrCreatedAtNotMonotone  = errors.New("ranke.verify: claim is dated before a claim it references")
 	errNotBranchTable        = errors.New("ranke.Archive.Verify: head is not a contribution/branches claim")
-	errRefsBranchTable       = errors.New("ranke.verify: claim references a branch table")
+	ErrRefsBranchTable       = errors.New("ranke.verify: claim references a branch table")
 	errEncodeClaim           = errors.New("ranke: encode claim")
 	errMarshalCBOR           = errors.New("ranke.MarshalCBOR")
 	errDecodeClaim           = errors.New("ranke.DecodeClaim")
@@ -214,7 +214,7 @@ var (
 	// ErrUnexplainedGap: a claim's bytes are missing and nothing explains the gap —
 	// no copied delete_by on the edge reaching it, no contribution/delete mark against
 	// it. Indistinguishable from data loss, which is why it fails.
-	errUnexplainedGap = errors.New("ranke.verify: a missing claim with no explained gap (no copied delete_by, no contribution/delete mark)")
+	ErrUnexplainedGap = errors.New("ranke.verify: a missing claim with no explained gap (no copied delete_by, no contribution/delete mark)")
 )
 
 // wrapErr attaches an optional detail string and/or an optional cause to a

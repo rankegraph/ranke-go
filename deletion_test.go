@@ -246,7 +246,7 @@ func TestVerifyFailsOnAnUnexplainedGap(t *testing.T) {
 	fs := run.Failures()
 	require.Len(t, fs, 1, "the unexplained gap fails")
 	require.True(t, fs[0].ID.Equal(src.ID()), "and names the claim that is missing")
-	require.ErrorIs(t, fs[0].Err, errUnexplainedGap)
+	require.ErrorIs(t, fs[0].Err, ErrUnexplainedGap)
 }
 
 // TestVerifyPassesOverARequestedGap: the other explanation `R-DGAP` admits — a

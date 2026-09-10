@@ -89,6 +89,30 @@ func (f *fixture) note(t *testing.T, body string) ranke.Claim {
 	return c
 }
 
+// TestDeniedContributionNamesTheRule: a contribution the verifier refuses carries the
+// rule it broke and the claim that broke it, so a client branches on the rule rather
+// than reading the message.
+func TestDeniedContributionNamesTheRule(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, ctx)
+
+	bad, err := ranke.NewClaim(ranke.TypeSource("note"), f.op).
+		WithInlineContent([]byte("body")).
+		WithEncoding(ranke.EncodingPlain).
+		WithHeight(99). // its lone contributor edge fixes 1
+		WithCreatedAt(f.clk.Tick()).
+		Sign()
+	require.NoError(t, err, "the claim seals; height is the verifier's to judge")
+
+	_, err = helpers.Contribute(ctx, f.seq, "main", []ranke.Claim{bad})
+	require.Error(t, err)
+	require.ErrorIs(t, err, ranke.ErrHeightMismatch, "the rule reaches the caller")
+
+	var vf ranke.Failure
+	require.ErrorAs(t, err, &vf, "and so does the failure")
+	require.True(t, vf.ID.Equal(bad.ID()), "naming the claim that broke it")
+}
+
 // head resolves the archive head k through a fresh snapshot.
 func (f *fixture) head(t *testing.T, ctx context.Context) ranke.Id {
 	t.Helper()

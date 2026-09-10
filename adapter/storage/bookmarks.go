@@ -1,4 +1,4 @@
-// package: adapter / bookmarkstore
+// package: adapter/storage / bookmarkstore
 // type:    logic
 // job:     the 𝒰_hist a blob-backed Universe hands out — over the same BlobStore seam, its entries
 // under a key prefix that keeps the two keyspaces apart (`R-BMPREFIX`)

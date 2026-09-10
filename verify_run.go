@@ -8,12 +8,28 @@ package ranke
 import "sync"
 
 // Failure is one verification failure: the claim that failed, its depth in
-// the walk, and why.
+// the walk, and why. It is an error itself, so it travels as the cause of one:
+// errors.Is reaches the rule through Unwrap, errors.As recovers the claim and depth.
 type Failure struct {
 	ID    Id
 	Depth int
 	Err   error
 }
+
+// Error names the claim and the rule it broke.
+func (f Failure) Error() string {
+	id := "?"
+	if f.ID != nil {
+		id = f.ID.String()
+	}
+	if f.Err == nil {
+		return "ranke.verify: claim " + id + " failed"
+	}
+	return "ranke.verify: claim " + id + ": " + f.Err.Error()
+}
+
+// Unwrap yields the rule that failed, which is what errors.Is matches.
+func (f Failure) Unwrap() error { return f.Err }
 
 // VerificationRun is a live handle on a verification, safe to read while the
 // walk runs — poll for progress, or Wait for completion.
