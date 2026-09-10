@@ -60,11 +60,3 @@ func TestFixturesOpenOncePerRow(t *testing.T) {
 func TestMatrixBranchClosure(t *testing.T) {
 	matrix.Run(t, matrix.Config{Size: 2, Only: "closure/branch"})
 }
-
-// TestMatrixReverseWalk guards the forward-then-reverse path at a size dense
-// enough that a source is reached only via the deriver citing it — the case a
-// single-trail lowering drops but a per-step frontier keeps. It passes at the
-// default size, so it needs the larger graph to be meaningful.
-func TestMatrixReverseWalk(t *testing.T) {
-	matrix.Run(t, matrix.Config{Size: 55, Only: "path/uses-of-sources"})
-}

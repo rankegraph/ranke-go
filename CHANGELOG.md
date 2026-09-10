@@ -91,6 +91,14 @@ What each release changed for someone depending on this repository.
 
 ### Changed
 
+- `make test/full` is a correctness gate: it no longer runs the performance benchmark
+  or the 10k-claim scale set. Both are development tools —
+  `make test/performance/N` and `bin/ranke-test` drive the benchmark, `RANKE_SCALE=1`
+  the scale set — and CI, which runs this target, was spending most of its time on
+  them. The target gained a `-race` pass over the concurrency suite on the
+  service-free rows, which is what its writer count was always sized for.
+- `make test/full` no longer honours `FULL_PERF_SIZE`; the variable is gone. Size the
+  benchmark through `make test/performance/N`.
 - `dev.NewSequencer` and `concurrent.NewSequencer` take a `BookmarkLocator` and read
   the store off the Universe: `NewSequencer(ctx, u, loc, self, clock)`. Both refuse a
   Universe reporting `Capabilities.Bookmarks` false at construction, joining

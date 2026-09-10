@@ -28,6 +28,12 @@ import (
 
 // defaultSize builds fast into every backend while still carrying every corner
 // (revisions, diff chains, external blobs, both relation polarities).
+//
+// It also carries the one corner that only some sizes have: a source reached only
+// through the derivation citing it, so a reverse step must re-cross that edge
+// (`R-QFRONTIER`). Sources acquire a contribution/head route of their own as the
+// archive grows, which retires the corner — it is absent below 5 and above 20, and
+// densest at 8. Moving this knob outside that window drops the corner silently.
 const defaultSize = 5
 
 // Config parameterises an agreement run.
