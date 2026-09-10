@@ -50,7 +50,10 @@ type fixture struct {
 	u     ranke.Universe
 	seq   ranke.Sequencer // the contract, so a scenario exercises what any Sequencer offers
 	clock *generator.Clock
-	self  ranke.Contributor // signs branch tables and authors content: contributor 0, the operator
+	// self authors content: the archive's first contributor, whom Found registers and
+	// the first branch heads on. Distinct from the Sequencer's own identity, which
+	// signs branch tables alone — the c_alice/c_seq split the annex draws.
+	self ranke.Contributor
 }
 
 // fixtureBase is the fixed instant the shared clock starts at, so a run reproduces byte-identically.
@@ -59,13 +62,13 @@ var fixtureBase = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 func newFixture(t *testing.T, ctx context.Context, backend Backend) *fixture {
 	t.Helper()
 	clock := generator.NewClock(fixtureBase, time.Second)
-	self := keyedContributor(t, ctx, clock, "sequencer")
+	operator := keyedContributor(t, ctx, clock, "sequencer")
 	u, err := backend(t, clock)
 	require.NoError(t, err, "open backend")
-	seq, err := devseq.NewSequencer(ctx, u, ranke.Seed([]byte(self.ID().String())), self, clock)
+	seq, err := devseq.NewSequencer(ctx, u, ranke.Seed([]byte(operator.ID().String())), operator, clock)
 	require.NoError(t, err, "stand up dev Sequencer")
 	require.True(t, seq.InGenesis(), "a fresh 𝒰_hist is an archive not yet founded")
-	_, err = helpers.Found(ctx, seq, "integration")
+	self, err := helpers.Found(ctx, seq, "integration")
 	require.NoError(t, err, "found the archive")
 	return &fixture{ctx: ctx, u: u, seq: seq, clock: clock, self: self}
 }

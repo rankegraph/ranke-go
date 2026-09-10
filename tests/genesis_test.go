@@ -7,12 +7,14 @@ package tests
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rankegraph/ranke-go"
 	devseq "github.com/rankegraph/ranke-go/adapter/sequencer/dev"
 	"github.com/rankegraph/ranke-go/adapter/storage/mem"
+	"github.com/rankegraph/ranke-go/queries"
 	"github.com/rankegraph/ranke-go/tests/generator"
 	"github.com/rankegraph/ranke-go/tests/helpers"
 	"github.com/stretchr/testify/require"
@@ -53,7 +55,8 @@ func TestPreGenesisRefusesEveryOperation(t *testing.T) {
 }
 
 // TestFoundCreatesTheArchive: Found is one operation writing the Sequencer's own
-// claim, the first contributor under it, k₀ and the bookmark that publishes it.
+// claim, the first contributor under it, k₀, the table binding the first branch to
+// that contributor, and the bookmark that publishes it.
 func TestFoundCreatesTheArchive(t *testing.T) {
 	ctx := context.Background()
 	clock := generator.NewClock(fixtureBase, time.Second)
@@ -66,12 +69,113 @@ func TestFoundCreatesTheArchive(t *testing.T) {
 
 	arc, err := seq.GetArchive(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, arc.Head(), "the head k₀ the bookmark records")
+	require.NotNil(t, arc.Head(), "the head the bookmark records")
 
 	// The first contributor resolves against the Sequencer's own claim (`V-SIG`),
-	// which is what makes the Sequencer key the only one able to sign it in. Verified
-	// over its own closure, since it sits outside the archive's.
-	verifyClosure(t, ctx, u, first.ID())
+	// which is what makes the Sequencer key the only one able to sign it in — and it
+	// sits inside the archive, the first branch being what reaches it.
+	br, err := arc.GetBranch(ctx, helpers.FoundBranch)
+	require.NoError(t, err)
+	require.True(t, first.ID().Equal(br.Head()), "the first branch heads on the first contributor")
+	verifyClosure(t, ctx, u, arc.Head())
+}
+
+// TestFoundRefusesAMalformedBranchName: the name rides in every table of the spine,
+// and one shaped like a reserved target ($archive, $universe, $branches) would be
+// shadowed at read time — so the charset admits no '$' at all.
+func TestFoundRefusesAMalformedBranchName(t *testing.T) {
+	ctx := context.Background()
+	clock := generator.NewClock(fixtureBase, time.Second)
+
+	for _, name := range []string{"", "$archive", "Main", "feature-x", "_hidden", strings.Repeat("b", 129)} {
+		t.Run(name, func(t *testing.T) {
+			seq, _ := genesisFixture(t, ctx, mem.New(), clock)
+			_, err := seq.Found(ctx, []byte("not a key, refused before it is read"), name)
+			require.ErrorIs(t, err, ranke.ErrBranchName)
+			require.True(t, seq.InGenesis(), "a refused name founds nothing")
+		})
+	}
+}
+
+// TestArchiveSetupRoutine is the whole of what a deployment does once: found, find
+// the first contributor from the archive ALONE, and grow from there. Step 2 is the
+// point — before the first branch existed, k₀ could not reference the contributor
+// (`V-ARCHIVEHEIGHT` gives the first table one reference), so the claim was reachable
+// from nothing and its id lived only in what Found returned. A restart lost it and
+// the archive could never be used.
+func TestArchiveSetupRoutine(t *testing.T) {
+	ctx := context.Background()
+	clock := generator.NewClock(fixtureBase, time.Second)
+	u := mem.New()
+	seq, loc := genesisFixture(t, ctx, u, clock)
+	self := seq.GetContributor()
+
+	// 1. Found. Everything the routine needs after this comes out of the archive.
+	_, err := helpers.Found(ctx, seq, "setup")
+	require.NoError(t, err)
+
+	// 2. Recover the first contributor WITHOUT what Found returned, from a Sequencer
+	// that never saw it. Reusing the returned value would prove nothing: that it is
+	// the only copy is the defect. The question is asked of the BRANCH the caller is
+	// registered in, since a claim signs under a contributor its own branch reaches —
+	// and it matches on the public key held out of band, which is exact where height
+	// or created_at would only be proxies for it.
+	restarted, err := devseq.NewSequencer(ctx, u, loc, self, clock)
+	require.NoError(t, err)
+	arc, err := restarted.GetArchive(ctx)
+	require.NoError(t, err)
+
+	priv := helpers.FoundedKey("setup")
+	pubkey, err := ranke.EncodePublicKey(priv.Public())
+	require.NoError(t, err)
+	matches, err := queries.ContributorsByKey(ctx, arc, helpers.FoundBranch, pubkey)
+	require.NoError(t, err)
+	require.Len(t, matches, 1, "the archive must yield the contributor whose key the caller holds")
+	found := matches[0]
+	firstUser, err := found.AsContributor(ctx, nil, priv)
+	require.NoError(t, err)
+
+	// 3. A second contributor, registered UNDER THE FIRST: `V-SIG` has a contributor
+	// claim signed by the contributor its edge names, so the first user's own key
+	// signs this one and the Sequencer key is not needed.
+	secondKey := helpers.FoundedKey("setup-second")
+	secondPub, err := ranke.EncodePublicKey(secondKey.Public())
+	require.NoError(t, err)
+	secondClaim, err := ranke.NewClaim(ranke.NodeContributor, firstUser).
+		WithInlineContent(secondPub).
+		WithEncoding(ranke.EncodingOctetStream).
+		WithCreatedAt(clock.Tick()).
+		WithAutoHeight(ctx, u).
+		Sign()
+	require.NoError(t, err)
+
+	// 4. A second branch holding it. Creating one is a right of its own (§Access,
+	// C over $branches), which Contribute grants.
+	_, err = helpers.Contribute(ctx, restarted, "reviewers", []ranke.Claim{secondClaim})
+	require.NoError(t, err)
+
+	// 5. Both branches stand, each on its own head, and the second branch reaches the
+	// whole chain of identity: the second contributor, the first, and the Sequencer's
+	// initial claim beneath them.
+	arc, err = restarted.GetArchive(ctx)
+	require.NoError(t, err)
+	branches, err := arc.GetBranches(ctx)
+	require.NoError(t, err)
+	names := make(map[string]ranke.Id, len(branches))
+	for _, b := range branches {
+		names[b.Name()] = b.Head()
+	}
+	require.Len(t, names, 2)
+	require.True(t, found.ID().Equal(names[helpers.FoundBranch]))
+	require.True(t, secondClaim.ID().Equal(names["reviewers"]))
+
+	g, err := ranke.NewGraphFromClosure(ctx, names["reviewers"], u)
+	require.NoError(t, err)
+	for _, want := range []ranke.Id{secondClaim.ID(), found.ID(), self.ID()} {
+		ok, err := g.ContainsClaim(ctx, want)
+		require.NoError(t, err)
+		require.Truef(t, ok, "%s must lie in the second branch's closure", want)
+	}
 	verifyClosure(t, ctx, u, arc.Head())
 }
 
@@ -122,7 +226,7 @@ func TestRestartReopensTheArchive(t *testing.T) {
 	priv := helpers.FoundedKey("restart")
 	pubkey, err := ranke.EncodePublicKey(priv.Public())
 	require.NoError(t, err)
-	firstClaim, err := seq.Found(ctx, pubkey)
+	firstClaim, err := seq.Found(ctx, pubkey, helpers.FoundBranch)
 	require.NoError(t, err)
 	firstUser, err := firstClaim.AsContributor(ctx, nil, priv)
 	require.NoError(t, err)

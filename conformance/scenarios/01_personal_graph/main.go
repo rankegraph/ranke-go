@@ -229,7 +229,7 @@ func main() {
 	// the Sequencer, which is the only key that can sign one in (`V-SIG`): bob hands
 	// over a public key and keeps its private half.
 	bobKey := must(ranke.LoadPrivateKey(helpers.KeyPath("bob.pem")))
-	must(seq.Found(ctx, bobKey.Pubkey))
+	must(seq.Found(ctx, bobKey.Pubkey, "main"))
 	helpers.WriteBookmarkId(seq)
 	head := must(testhelpers.Contribute(ctx, seq, "main", []ranke.Claim{
 		emailApples, emailFamily, summary,

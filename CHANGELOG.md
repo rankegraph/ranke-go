@@ -22,12 +22,34 @@ What each release changed for someone depending on this repository.
   Universe.
 - `MintSeed()` — a fresh 128-bit list seed (`V-BMENV`), for whoever founds a list and
   keeps the value.
-- `Sequencer.InGenesis()` and `Sequencer.Found(ctx, pubkey)`. An archive now comes
-  into being through `Found` alone, as one operation writing the Sequencer's initial
-  claim, the first contributor under it, the empty branch table k₀ and its bookmark.
-  It returns that contributor's claim — `V-SIG` lets only the Sequencer key sign one,
-  so the caller hands over a public key and keeps its private half. A second call is
-  refused, and `ErrSequencerGenesis` answers every other operation until it succeeds.
+- `Sequencer.InGenesis()` and `Sequencer.Found(ctx, pubkey, branch)`. An archive now
+  comes into being through `Found` alone, as one operation writing the Sequencer's
+  initial claim, the first contributor under it, the empty table k₀, and a second
+  table binding `branch` to that contributor. Only the second is bookmarked, so a
+  crash part-way leaves no archive and a retry writes the same ids. It returns that
+  contributor's claim — `V-SIG` lets only the Sequencer key sign one, so the caller
+  hands over a public key and keeps its private half. A second call is refused, and
+  `ErrSequencerGenesis` answers every other operation until it succeeds.
+
+  The branch is what makes the contributor reachable. `V-ARCHIVEHEIGHT` allows k₀ one
+  reference, so it cannot name the contributor, and a founded archive used to hold no
+  branch at all: the claim sat in 𝒰 referenced by nothing, its id recoverable only
+  from what `Found` returned. A caller who restarted before contributing had an
+  archive nobody could ever write to.
+- Package `queries` — the reads a caller needs before it can write anything, written
+  as ordinary RQL so it serves as a worked example as much as a library.
+  `Contributors(ctx, arc, branch)` lists a branch's contributors;
+  `ContributorsByKey(ctx, arc, branch, pubkey)` returns those carrying a public key,
+  one of whose ids its holder must reference to sign (`V-SIG`). Several can match —
+  no rule makes a `pubkey` unique, so one key registered by two contributors is two
+  identities carrying different provenance, and choosing between them is the
+  caller's. RQL filters on a claim's shape rather than its content, so the key match
+  is made over the set, which is people and agents rather than claims.
+- `ValidateBranchName` and `ErrBranchName`. A branch name is at most 128 bytes over
+  `[a-z0-9_]` with no leading `_`, the form `R-FIELDS` gives a name, checked by
+  `Found` and by every contribution that creates a branch. The charset admits no `$`,
+  so a branch can no longer take a reserved target's name and be shadowed by it at
+  read time.
 
 ### Changed
 
@@ -66,3 +88,7 @@ What each release changed for someone depending on this repository.
   stored fixed-width form, which named the wrong instant — equality matched nothing,
   `ge` skipped the second it asked for and `lt` included it. `FormatTimestamp` renders
   the form a caller holding a `time.Time` needs.
+- A merge no longer consolidates a branch's previous head into a new one that already
+  reaches it. Revising the branch head used to mint a `contribution/head` over the
+  revision and the claim it revises, which explains nothing and is not what the
+  papers' own worked example shows.

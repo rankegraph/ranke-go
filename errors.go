@@ -121,6 +121,7 @@ var (
 	ErrReservedType          = errors.New("ranke.Contribution: node type is the Sequencer's alone (lift it to add one)")
 	ErrFutureDated           = errors.New("ranke.Contribution: claim is dated after the base the contribution opened against")
 	ErrBranchNotCreatable    = errors.New("ranke.Contribution: branch is absent from the base, and creating one is a right of its own")
+	ErrBranchName            = errors.New("ranke: a branch name is at most 128 bytes over [a-z0-9_] with no leading _")
 	ErrUnreadableReference   = errors.New("ranke.Contribution: reference reaches a claim outside the branches this contribution may read")
 	errContributionRefs      = errors.New("ranke.AdmitReferences")
 	ErrWire                  = errors.New("ranke.Wire")

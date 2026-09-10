@@ -175,7 +175,9 @@ func branchNames(claimCount int, seed int64, want int) []string {
 	f := gofakeit.New(contentSeed(seed, "branch", 0))
 	seen := map[string]bool{"main": true}
 	for len(names) < want {
-		w := strings.ToLower(f.Word())
+		// The word list carries hyphens and apostrophes, which no branch name may
+		// hold, so keep only what ValidateBranchName admits.
+		w := branchNameSafe(f.Word())
 		if w == "" || seen[w] {
 			continue
 		}
@@ -183,4 +185,15 @@ func branchNames(claimCount int, seed int64, want int) []string {
 		names = append(names, w)
 	}
 	return names
+}
+
+// branchNameSafe reduces a generated word to the charset a branch name takes.
+func branchNameSafe(word string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(word) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

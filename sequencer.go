@@ -19,9 +19,9 @@ type Sequencer interface {
 	// InGenesis reports no archive here yet, leaving Found the one operation.
 	InGenesis() bool
 	// Found creates the archive, once: the Sequencer's initial claim, the first
-	// contributor under it carrying pubkey, the empty table k₀, its bookmark. It
-	// returns that contributor's claim, which `V-SIG` lets only the Sequencer sign.
-	Found(ctx context.Context, pubkey []byte) (Claim, error)
+	// contributor carrying pubkey, and the branch binding it, so the list alone
+	// reaches it. Returns its claim, which `V-SIG` lets only the Sequencer sign.
+	Found(ctx context.Context, pubkey []byte, branch string) (Claim, error)
 	// GetArchive returns the current immutable snapshot RA_k.
 	GetArchive(ctx context.Context) (Archive, error)
 	// GetContributor returns the contributor the Sequencer attests branch
