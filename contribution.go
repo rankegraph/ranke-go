@@ -63,6 +63,11 @@ func WithCreatableBranches(branches ...string) ContributionOption {
 // AdmitBranch reports whether the contribution may write to branch, which the base
 // carrying it settles: creating one is a right of its own (§Access, C over $branches).
 func (c Constraints) AdmitBranch(ctx context.Context, base Archive, branch string) error {
+	// Before the grant: a name outside the form is refused however wide the grant,
+	// since one shaped like a reserved target would be shadowed at read time.
+	if err := ValidateBranchName(branch); err != nil {
+		return err
+	}
 	_, err := base.GetBranch(ctx, branch)
 	switch {
 	case err == nil:

@@ -1,6 +1,7 @@
 // package: ranke / claim_type_branch
 // type:    logic
-// job:     the Branch view over a contribution/branch edge — a named pointer into an archive's branch table
+// job:     the Branch view over a contribution/branch edge — a named pointer into an archive's branch
+// table — and the form a branch name takes
 // limits:  the branch-table logic (materialising the diff chain) lives in the Archive (-> archive);
 // a Branch only navigates the subgraph its edge references
 package ranke
@@ -8,7 +9,33 @@ package ranke
 import (
 	"context"
 	"io"
+	"strconv"
 )
+
+// branchNameMax bounds a branch name, as `R-FIELDS` bounds a field name: the label
+// rides in every table of the spine, so an unbounded one is carried forever.
+const branchNameMax = 128
+
+// ValidateBranchName holds a branch label to the form `R-FIELDS` gives a name —
+// `[a-z0-9_]`, no leading underscore, at most 128 bytes. The charset admits no `$`,
+// so a branch can never take a reserved target's name (BranchArchive, BranchUniverse,
+// TargetBranches) and be shadowed by it at read time.
+func ValidateBranchName(name string) error {
+	switch {
+	case name == "":
+		return WithDetail(ErrBranchName, "empty")
+	case len(name) > branchNameMax:
+		return WithDetail(ErrBranchName, strconv.Itoa(len(name))+" bytes")
+	case name[0] == '_':
+		return WithDetail(ErrBranchName, name)
+	}
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
+			return WithDetail(ErrBranchName, name)
+		}
+	}
+	return nil
+}
 
 // Branch is one entry of an archive's branch table — the named
 // contribution/branch edge itself, plus navigation into its subgraph.

@@ -130,21 +130,22 @@ func (s *Sequencer) InGenesis() bool {
 	return s.head == nil
 }
 
-// Found creates the archive: the Sequencer's own claim, the first contributor under
-// it, the empty table k₀, and the bookmark that publishes it. Everything before that
-// bookmark is content-addressed and outside any closure, so a crash part-way leaves
-// no archive and a retry writes the same ids (paper 02 step 7).
-func (s *Sequencer) Found(ctx context.Context, pubkey []byte) (ranke.Claim, error) {
+// Found creates the archive: k₀ empty as `V-ARCHIVEHEIGHT` fixes, then k₁ binding
+// branch to the first contributor. Only k₁ is bookmarked, so a crash retries clean.
+func (s *Sequencer) Found(ctx context.Context, pubkey []byte, branch string) (ranke.Claim, error) {
+	if err := ranke.ValidateBranchName(branch); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.head != nil {
 		return nil, ranke.WithDetail(errFounded, s.head.String())
 	}
-	return s.found(ctx, pubkey)
+	return s.found(ctx, pubkey, branch)
 }
 
 // found is Found under the lock: the writes in order, the bookmark last.
-func (s *Sequencer) found(ctx context.Context, pubkey []byte) (ranke.Claim, error) {
+func (s *Sequencer) found(ctx context.Context, pubkey []byte, branch string) (ranke.Claim, error) {
 	// The Sequencer's own claim first, so the contributor below it resolves.
 	if err := s.u.PutClaims(ctx, []ranke.Claim{s.self}); err != nil {
 		return nil, fmt.Errorf("%w: store contributor: %w", errFound, err)
@@ -161,16 +162,25 @@ func (s *Sequencer) found(ctx context.Context, pubkey []byte) (ranke.Claim, erro
 	if err := s.u.PutClaims(ctx, []ranke.Claim{first}); err != nil {
 		return nil, fmt.Errorf("%w: store the first contributor: %w", errFound, err)
 	}
-	// Empty branch table → archive head k₀, published as bookmark 0.
+	// The empty table k₀: one reference, its contributor edge, as `V-ARCHIVEHEIGHT`
+	// fixes. It carries no branch, so it goes unbookmarked.
 	bt0, err := s.mintBranchTable(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.marks.Append(ctx, s.self, bt0.ID()); err != nil {
-		return nil, fmt.Errorf("%w: bookmark k₀: %w", errFound, err)
-	}
+	// k₁ puts the contributor in a closure the list reaches. One bookmark: two would
+	// strand it for good if a crash fell between them.
 	s.head = bt0.ID()
-	// Index k₀, so a layer answering membership from its own index holds the operator,
+	s.heads[branch] = first.ID()
+	bt1, err := s.mintBranchTable(ctx, []string{branch})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.marks.Append(ctx, s.self, bt1.ID()); err != nil {
+		return nil, fmt.Errorf("%w: bookmark k₁: %w", errFound, err)
+	}
+	s.head = bt1.ID()
+	// Index k₁, so a layer answering membership from its own index holds the operator,
 	// which sits on the spine.
 	if err := s.u.Tag(ctx, s.head); err != nil {
 		return nil, fmt.Errorf("%w: tag: %w", errFound, err)
@@ -253,10 +263,17 @@ func (s *Sequencer) Merge(ctx context.Context, mc ranke.MergableContribution) (r
 		if len(fresh) == 0 {
 			continue // the branch holds it all already
 		}
-		// Fold the branch's previous head in so its closure accumulates across merges.
+		// Fold the previous head in so the closure accumulates — unless a fresh head
+		// already reaches it, when consolidating would explain nothing.
 		folded := fresh
 		if hasPrior {
-			folded = append(append([]ranke.Id{}, fresh...), prior)
+			reached, err := ranke.InClosure(ctx, s.u, ranke.BranchUniverse, fresh, prior)
+			if err != nil {
+				return nil, fmt.Errorf("%w: branch %q prior closure test: %w", errSequencer, branch, err)
+			}
+			if !reached {
+				folded = append(append([]ranke.Id{}, fresh...), prior)
+			}
 		}
 		newHead := folded[0]
 		if len(folded) > 1 {

@@ -8,11 +8,14 @@ import (
 	"testing"
 
 	"github.com/rankegraph/ranke-go"
+	"github.com/rankegraph/ranke-go/tests/helpers"
 	"github.com/stretchr/testify/require"
 )
 
-// TestSequencerBootstrap: a fresh archive opens at an empty branch table — a
-// contribution/branches head carrying no branches until the first commit.
+// TestSequencerBootstrap: a fresh archive opens on one branch, headed on the first
+// contributor. The empty table k₀ is still there, one table below — `V-ARCHIVEHEIGHT`
+// allows it a single reference, so the branch that reaches the contributor has to sit
+// above it, and that is the table the bookmark names.
 func TestSequencerBootstrap(t *testing.T) {
 	ctx := context.Background()
 	f := memFixture(t, ctx)
@@ -20,11 +23,14 @@ func TestSequencerBootstrap(t *testing.T) {
 	arc := f.snapshot(t)
 	brs, err := arc.GetBranches(ctx)
 	require.NoError(t, err, "GetBranches")
-	require.Empty(t, brs, "fresh archive has no branches")
+	require.Len(t, brs, 1, "founding binds the first contributor to one branch")
+	require.Equal(t, helpers.FoundBranch, brs[0].Name())
+	require.True(t, f.self.ID().Equal(brs[0].Head()),
+		"which heads on the contributor, so the archive alone yields its id")
 
-	has, err := arc.HasBranch(ctx, "main")
+	has, err := arc.HasBranch(ctx, "unfounded")
 	require.NoError(t, err, "HasBranch")
-	require.False(t, has, "no main branch before the first commit")
+	require.False(t, has, "and on no other")
 }
 
 // TestSequencerAdvancesHead: each merge advances the head, and the receipt names

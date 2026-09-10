@@ -54,6 +54,10 @@ func FoundedKey(label string) ed25519.PrivateKey {
 	return ed25519.NewKeyFromSeed(seed[:])
 }
 
+// FoundBranch is the branch Found binds the first contributor to — "main", which the
+// fixtures then contribute to, so a test archive holds one branch rather than two.
+const FoundBranch = "main"
+
 // Found brings seq's archive into being under the key label names, which every
 // operation but Found itself now requires. It returns the first contributor,
 // resolved with its own private key so a test may contribute as it.
@@ -63,7 +67,7 @@ func Found(ctx context.Context, seq ranke.Sequencer, label string) (ranke.Contri
 	if err != nil {
 		return nil, err
 	}
-	first, err := seq.Found(ctx, pubkey)
+	first, err := seq.Found(ctx, pubkey, FoundBranch)
 	if err != nil {
 		return nil, err
 	}
