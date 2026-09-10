@@ -160,6 +160,8 @@ var (
 	errNoEnvelope            = errors.New("ranke.Claim.Envelope: this claim holds no stored record — it was rebuilt from parts, which carry no signature; id")
 	errLoadKeypair           = errors.New("ranke.LoadPrivateKey")
 	errLoadPrivKey           = errors.New("ranke.LoadEd25519PrivateKeyPEM")
+	ErrKeyEncrypted          = errors.New("ranke: the key is encrypted, and decrypting one is the caller's (openssl pkcs8 -topk8 -nocrypt)")
+	ErrKeyFormat             = errors.New("ranke: the key is not a PKCS#8 PEM (openssl pkcs8 -topk8 converts one)")
 	errLoadPubKey            = errors.New("ranke.LoadEd25519PublicKeyPEM")
 	errVerifyContentOp       = errors.New("ranke.VerifyContent")
 	errVerifyingReader       = errors.New("ranke.NewVerifyingReader")

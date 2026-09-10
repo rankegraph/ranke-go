@@ -42,6 +42,22 @@ What each release changed for someone depending on this repository.
   these over `os.ReadFile`. Without them a consumer re-implemented `pem.Decode` →
   `ParsePKCS8PrivateKey` → the Ed25519 assertion → `EncodePublicKey`, error wording
   included.
+- An encrypted key opens, and an unencrypted one asks for nothing. `WithPassphrase`
+  supplies one; `WithPassphraseFrom` fetches it only once the key proves encrypted, so
+  a tool configured with `--key-passphrase prompt` and handed a plaintext key never
+  prompts. `IsEncryptedKey` reports it outright, for a caller that wants to branch
+  itself. Both options reach `ParseKeypair`, `ParseEd25519PrivateKeyPEM`,
+  `LoadPrivateKey` and `LoadEd25519PrivateKeyPEM`.
+
+  The passphrase is read where the key is loaded and nowhere else, so signing a hundred
+  claims costs one. An encrypted key without a passphrase now says so: it used to fail
+  as `asn1: structure error: tags don't match`, which names nothing an operator can act
+  on. `ErrKeyFormat` does the same for `OPENSSH PRIVATE KEY`, which `ssh-keygen` writes
+  and no passphrase converts.
+
+  Decryption is PKCS#8 under PBES2 (`github.com/youmark/pkcs8`, a new dependency whose
+  own reach is `x/crypto`'s pbkdf2 and scrypt) and RFC 1423's legacy header form is
+  recognised well enough to name itself.
 - Package `keysource` — the one grammar an app resolves a key argument through, so the
   rules that keep material off disk and off the command line are written once rather
   than in each tool. `Load(spec, in, opts...)` is the whole of what an app does at
