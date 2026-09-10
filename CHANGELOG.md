@@ -67,6 +67,18 @@ What each release changed for someone depending on this repository.
 
 ### Removed
 
+- Package `client`, the HTTP client for a RankeDB server. ranke-go is the library the
+  server is built on, so a client for that server belongs in the server's own
+  repository, beside the OpenAPI contract it is written against — here it tracked a
+  spec it could not see, and its tests answered a stub of its own. It moves to
+  ranke-db. Nothing in ranke-go used it, and no repository that depends on ranke-go
+  imported it; an outside consumer takes it from ranke-db instead.
+
+  The wire format stays: `codec_wire` is the contribution stream, a CBOR sequence
+  (RFC 8742), and is transport-independent — what an HTTP body carries rather than
+  something HTTP defines. What left with the client is the *result* framing, chosen by
+  media type (`application/json-seq`, `application/cbor-seq`), which is the endpoint
+  contract's business.
 - `NewMemoryBookmarks` and `fs.NewBookmarks`, and `storage.NewBlobBookmarks` is
   unexported. A bookmark store now comes from the Universe holding it and nowhere
   else, so a detached 𝒰_hist — a file bookmark list over an in-memory universe —
