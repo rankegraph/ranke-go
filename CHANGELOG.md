@@ -36,6 +36,28 @@ What each release changed for someone depending on this repository.
   branch at all: the claim sat in 𝒰 referenced by nothing, its id recoverable only
   from what `Found` returned. A caller who restarted before contributing had an
   archive nobody could ever write to.
+- `ParseKeypair`, `ParseEd25519PrivateKeyPEM` and `ParseEd25519PublicKeyPEM` read a
+  key from bytes, a key arriving as readily from an environment variable, a pipe or a
+  paste as from a file. The three `Load*` functions keep their signatures and are now
+  these over `os.ReadFile`. Without them a consumer re-implemented `pem.Decode` →
+  `ParsePKCS8PrivateKey` → the Ed25519 assertion → `EncodePublicKey`, error wording
+  included.
+- Package `keysource` — the one grammar an app resolves a key argument through, so the
+  rules that keep material off disk and off the command line are written once rather
+  than in each tool. `Load(spec, in, opts...)` is the whole of what an app does at
+  startup; `Parse` checks the spelling while touching nothing, and `Spec.Read` performs
+  the I/O, so a rotating secret is fetched where it signs rather than at launch.
+
+  The spellings are a bare path or `file:PATH`, `env:NAME`, `stdin`, and `prompt` under
+  `WithTTY()`. Three refusals come with them: a key file others can read (ssh's rule,
+  for ssh's reason), material passed where a source belongs — reported as *compromised
+  and to be rotated*, since a command line reaches the process table, the shell history
+  and any CI log — and a prompt without the opt-in, which is how a server is stopped
+  from blocking on a terminal read. A scheme it does not serve is refused rather than
+  read as a filename, so `evn:KEY` names the typo instead of a missing file.
+
+  It yields bytes and knows nothing of keys, so the same grammar serves a passphrase
+  that is not a ranke key at all.
 - Package `queries` — the reads a caller needs before it can write anything, written
   as ordinary RQL so it serves as a worked example as much as a library.
   `Contributors(ctx, arc, branch)` lists a branch's contributors;
