@@ -1,4 +1,4 @@
-// package: main / cli
+// package: cmd/test / cli
 // type:    cmd
 // job:     `test` — a cobra CLI for running the project's customizable test tooling; today one
 // subcommand, `performance`, drives the backend matrix

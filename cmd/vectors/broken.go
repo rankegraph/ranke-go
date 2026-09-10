@@ -1,4 +1,4 @@
-// package: main / vectors_broken
+// package: cmd/vectors / broken
 // type:    cmd
 // job:     the records every implementation must reject, each isolating one failure — a wrong id, a
 // record stored bare where an envelope belongs, an unresolvable contributor, a declared height that

@@ -1,4 +1,4 @@
-// package: main / vectors_graph
+// package: cmd/vectors / graph
 // type:    cmd
 // job:     the conformance graph every implementation must verify — one claim per ADT shape, small
 // enough that a reader can check each record against §4.1 by eye

@@ -1,7 +1,7 @@
 // Byte-oriented backends (mem, fs, sqlite, s3, …) differ only in how they store
 // bytes by key, so the shared claim/content/copy machinery lives here.
 
-// package: adapter / blobstore
+// package: adapter/storage / blobstore
 // type:    logic
 // job:     the BlobStore seam — three byte primitives (Get/Put/Has) become a full ranke.Universe
 // limits:  no storage of its own; concrete blob backends live in sub-packages (-> adapter/fs, adapter/mem)

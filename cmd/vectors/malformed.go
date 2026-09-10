@@ -1,4 +1,4 @@
-// package: main / vectors_malformed
+// package: cmd/vectors / malformed
 // type:    cmd
 // job:     the records no builder here will produce — a timestamp outside the form `V-TIME` fixes,
 // and a record carrying both content slots `V-CONTENT` forbids — each offered under an id that
