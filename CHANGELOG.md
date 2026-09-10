@@ -88,9 +88,23 @@ What each release changed for someone depending on this repository.
   `Found` and by every contribution that creates a branch. The charset admits no `$`,
   so a branch can no longer take a reserved target's name and be shadowed by it at
   read time.
+- `HeightResolver`, and the resolvers `FixedHeight(h)`, `HeightsIn(u)` and
+  `HeightsFrom(claims ...Claim)`, plus `ClaimBuilder.WithHeightResolver(ctx, resolve)`.
+  A claim's height is now answered by one mechanism: a resolver, asked about every
+  reference the assembled claim carries — the contributor edge included. So a caller
+  whose heights live somewhere other than a `Universe`, such as a database or claims
+  already in memory, supplies the lookup instead of a store, and `HeightsFrom`
+  reports an absent reference rather than treating it as height 0.
 
 ### Changed
 
+- `ClaimBuilder.Height` is a `HeightResolver` where it was a `uint64`. A struct
+  literal states `Height: FixedHeight(HeightOf(refs...))` where it stated
+  `Height: HeightOf(refs...)`; the chained `WithHeight(h)` is unchanged, being
+  `FixedHeight` under another name. Height therefore has one slot, so `WithHeight`,
+  `WithAutoHeight` and `WithHeightResolver` no longer conflict — the last one set
+  answers, and the error that reported the conflict is gone. Claim bytes and ids are
+  untouched: the resolved value is what it always was.
 - `make test/full` is a correctness gate: it no longer runs the performance benchmark
   or the 10k-claim scale set. Both are development tools —
   `make test/performance/N` and `bin/ranke-test` drive the benchmark, `RANKE_SCALE=1`

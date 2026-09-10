@@ -34,13 +34,13 @@ type ClaimBuilder struct {
 	DiffOf Id
 	Edges  []Edge
 	Fields map[string]string
-	// Height is the claim's generation number (§4.1): 0 on an initial claim, else
-	// 1 + max(reference heights), which a referencing claim must declare.
-	Height uint64
-	// autoHeight* back WithAutoHeight — a Universe plus context, so the mode is
-	// reachable only through the chained setter.
-	autoHeightU   Universe
-	autoHeightCtx context.Context
+	// Height answers the claim's generation number (§4.1) from the references the
+	// assembled claim carries: FixedHeight for a value already known, HeightsIn or
+	// HeightsFrom to derive it. A referencing claim must set one.
+	Height HeightResolver
+	// heightCtx is the context WithHeightResolver took; a struct literal leaves it
+	// nil and the resolver is asked against context.Background().
+	heightCtx context.Context
 	// SigningKey signs this claim's envelope. A contributor claim's pubkey is its
 	// InlineContent, multikey-encoded.
 	SigningKey crypto.Signer
@@ -106,15 +106,98 @@ func (b ClaimBuilder) WithDated(t time.Time) ClaimBuilder {
 // WithDated's single calendar day can't express.
 func (b ClaimBuilder) WithDatedEDTF(d string) ClaimBuilder { b.Dated = d; return b }
 
-// WithHeight sets the generation number (§4.1) — 1 + max over the referenced
-// heights, or 0 for an initial claim. The verifier re-derives and enforces it.
-func (b ClaimBuilder) WithHeight(h uint64) ClaimBuilder { b.Height = h; return b }
+// HeightResolver answers the generation number (§4.1) a claim carries, given the
+// references its assembled edge set holds — the contributor edge included, since the
+// edge set is the input. `V-HEIGHT` fixes the answer at 1 + max over those
+// references' heights, so a resolver that cannot reach one errors rather than
+// treating it as height 0, which would build a claim verification refuses.
+type HeightResolver func(ctx context.Context, refs []Id) (uint64, error)
 
-// WithAutoHeight makes Sign read each referenced claim's committed height from
-// u and set 1 + max (0 with no references), exclusive with WithHeight.
-func (b ClaimBuilder) WithAutoHeight(ctx context.Context, u Universe) ClaimBuilder {
-	b.autoHeightCtx, b.autoHeightU = ctx, u
+// FixedHeight answers h whatever the references are — the resolver for a caller
+// that already holds the value, and what WithHeight sets.
+func FixedHeight(h uint64) HeightResolver {
+	return func(context.Context, []Id) (uint64, error) { return h, nil }
+}
+
+// HeightsIn derives the height from u: 1 + max over the references' committed
+// heights, and 0 for a claim referencing nothing.
+func HeightsIn(u Universe) HeightResolver {
+	return func(ctx context.Context, refs []Id) (uint64, error) {
+		if len(refs) == 0 {
+			return 0, nil
+		}
+		heights, err := u.GetClaimHeights(ctx, refs)
+		if err != nil {
+			return 0, err
+		}
+		if len(heights) != len(refs) {
+			return 0, WithDetail(ErrNotFound, "the store answered fewer heights than the references given")
+		}
+		return maxHeight(heights) + 1, nil
+	}
+}
+
+// HeightsFrom derives the height from claims already in hand, for a caller building
+// against claims in memory rather than a Universe. A reference none of claims carries
+// is reported absent, which is what catches a claim citing one the caller left out.
+func HeightsFrom(claims ...Claim) HeightResolver {
+	byID := make(map[string]uint64, len(claims))
+	for _, c := range claims {
+		if c == nil {
+			continue
+		}
+		byID[c.ID().String()] = c.Node().Height()
+	}
+	return func(_ context.Context, refs []Id) (uint64, error) {
+		if len(refs) == 0 {
+			return 0, nil
+		}
+		heights := make([]uint64, len(refs))
+		for i, r := range refs {
+			if r == nil {
+				return 0, WithDetail(ErrNotFound, "a nil reference has no height to resolve")
+			}
+			h, ok := byID[r.String()]
+			if !ok {
+				return 0, WithDetail(ErrNotFound,
+					"reference "+r.String()+" is absent from the claims HeightsFrom was given")
+			}
+			heights[i] = h
+		}
+		return maxHeight(heights) + 1, nil
+	}
+}
+
+// maxHeight is the greatest of heights, 0 when empty.
+func maxHeight(heights []uint64) uint64 {
+	var max uint64
+	for _, h := range heights {
+		if h > max {
+			max = h
+		}
+	}
+	return max
+}
+
+// WithHeight sets the generation number (§4.1) as a value already known — 1 + max
+// over the referenced heights, or 0 for an initial claim. HeightsIn and HeightsFrom
+// derive it instead. The verifier re-derives and enforces it either way.
+func (b ClaimBuilder) WithHeight(h uint64) ClaimBuilder { b.Height = FixedHeight(h); return b }
+
+// WithHeightResolver makes Sign ask resolve for the height, against every reference
+// the closed claim carries. For a caller whose heights live somewhere other than a
+// Universe — a database, or claims in memory.
+func (b ClaimBuilder) WithHeightResolver(ctx context.Context, resolve HeightResolver) ClaimBuilder {
+	b.heightCtx, b.Height = ctx, resolve
 	return b
+}
+
+// WithAutoHeight resolves the height against u.
+func (b ClaimBuilder) WithAutoHeight(ctx context.Context, u Universe) ClaimBuilder {
+	if u == nil {
+		return b.WithHeightResolver(ctx, nil)
+	}
+	return b.WithHeightResolver(ctx, HeightsIn(u))
 }
 
 // WithContributor sets the attributing contributor.
@@ -434,52 +517,33 @@ func applyContent(n *node, cfg ClaimBuilder, hasInline, hasExternal bool) error 
 	return nil
 }
 
-// resolveHeight derives the generation number (§4.1) from the assembled edges:
-// 0 on an initial claim, a declared non-zero Height on a referencing claim, or
-// the WithAutoHeight lookup, which rejects a conflicting explicit Height.
+// resolveHeight asks cfg.Height for the generation number (§4.1) over the references
+// the assembled edges carry. One mechanism: a value already known arrives as
+// FixedHeight, a derived one as HeightsIn or HeightsFrom. A claim referencing nothing
+// is height 0 and needs no resolver, and refuses one answering otherwise.
 func resolveHeight(cfg ClaimBuilder, edges []*edge) (uint64, error) {
-	if cfg.autoHeightU != nil {
-		if cfg.Height != 0 {
-			return 0, errHeightWithAuto
-		}
-		return computeAutoHeight(cfg.autoHeightCtx, cfg.autoHeightU, edges)
+	refs := make([]Id, len(edges))
+	for i, e := range edges {
+		refs[i] = e.reference
 	}
-	if len(edges) == 0 {
-		if cfg.Height != 0 {
-			return 0, errHeightOnInitial
+	if cfg.Height == nil {
+		if len(refs) == 0 {
+			return 0, nil
 		}
-		return 0, nil
-	}
-	if cfg.Height == 0 {
 		return 0, errHeightRequired
 	}
-	return cfg.Height, nil
-}
-
-// computeAutoHeight returns 1 + max of the referenced claims' committed heights
-// from u (0 with no references) — one level, since each carries its own height.
-func computeAutoHeight(ctx context.Context, u Universe, edges []*edge) (uint64, error) {
-	if len(edges) == 0 {
-		return 0, nil
-	}
+	ctx := cfg.heightCtx
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ids := make([]Id, len(edges))
-	for i, e := range edges {
-		ids[i] = e.reference
-	}
-	heights, err := u.GetClaimHeights(ctx, ids)
+	h, err := cfg.Height(ctx, refs)
 	if err != nil {
 		return 0, Wrap(errHeightResolve, err)
 	}
-	var max uint64
-	for _, h := range heights {
-		if h > max {
-			max = h
-		}
+	if len(refs) == 0 && h != 0 {
+		return 0, errHeightOnInitial
 	}
-	return max + 1, nil
+	return h, nil
 }
 
 // normalizeCreatedAt defaults a zero timestamp to now and normalises to UTC.

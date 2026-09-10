@@ -42,7 +42,7 @@ func claimAt(t *testing.T, ctr ranke.Contributor, at time.Time, height uint64) r
 		Type:        ranke.TypeSource("note"),
 		Contributor: ctr,
 		CreatedAt:   at,
-		Height:      height,
+		Height:      ranke.FixedHeight(height),
 	}.Sign()
 	require.NoError(t, err)
 	return c
