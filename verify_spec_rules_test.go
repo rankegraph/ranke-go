@@ -64,7 +64,7 @@ func TestTableRefThroughOtherEdgeFails(t *testing.T) {
 
 	fs := verifyOne(t, next, ctr, base, next)
 	require.Len(t, fs, 1, "a table reaching a table through a derivation edge must fail")
-	require.ErrorIs(t, fs[0].Err, errRefsBranchTable)
+	require.ErrorIs(t, fs[0].Err, ErrRefsBranchTable)
 }
 
 // TestOpenContributionSubtypeMayScheduleDeletion is the loosening: `R-DSTRUCT` names

@@ -513,7 +513,7 @@ func TestVerifyRejectsWrongHeight(t *testing.T) {
 	var found bool
 	for _, f := range run.Failures() {
 		if f.ID.Equal(bad.ID()) {
-			require.ErrorIs(t, f.Err, errHeightMismatch)
+			require.ErrorIs(t, f.Err, ErrHeightMismatch)
 			found = true
 		}
 	}

@@ -98,6 +98,14 @@ What each release changed for someone depending on this repository.
 
 ### Changed
 
+- A contribution the Sequencer refuses now carries the rule it broke. `Failure` is an
+  `error`, so both Sequencer adapters return it as the cause: `errors.Is` reaches the
+  rule and `errors.As` recovers the claim id and its depth in the walk. They flattened
+  it into the message before, leaving a client to parse text or guess.
+- `ErrHeightMismatch`, `ErrContributorUnresolved`, `ErrKeyWindowField`,
+  `ErrRefsBranchTable` and `ErrUnexplainedGap` are exported, joining the ten
+  verification rules already public. Every rule a claim can break is now matchable by
+  the caller that gets told about it.
 - `ClaimBuilder.Height` is a `HeightResolver` where it was a `uint64`. A struct
   literal states `Height: FixedHeight(HeightOf(refs...))` where it stated
   `Height: HeightOf(refs...)`; the chained `WithHeight(h)` is unchanged, being

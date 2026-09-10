@@ -102,7 +102,7 @@ func edgeBound(e Edge, field string) (*time.Time, error) {
 	}
 	t, err := parseRFC3339Nano(v)
 	if err != nil {
-		return nil, WrapDetail(errKeyWindowField, field+"="+v, err)
+		return nil, WrapDetail(ErrKeyWindowField, field+"="+v, err)
 	}
 	return &t, nil
 }

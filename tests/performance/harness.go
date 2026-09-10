@@ -180,7 +180,7 @@ func runBackend(ctx context.Context, name string, spec generator.Spec, u0 ranke.
 			return 0, fmt.Errorf("%s: verify: %w", name, err)
 		}
 		if fs := run.Failures(); len(fs) > 0 {
-			return 0, fmt.Errorf("%s: %d verify failure(s), first: %v", name, len(fs), fs[0])
+			return 0, fmt.Errorf("%s: %d verify failure(s), first: %w", name, len(fs), fs[0])
 		}
 	}
 

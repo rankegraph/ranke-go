@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -152,8 +153,10 @@ func (c *contribution) CompleteAndVerify(ctx context.Context) (ranke.VerifiedCon
 			return nil, fmt.Errorf("%w: verify %q: %w", errContribution, branch, err)
 		}
 		if fs := run.Failures(); len(fs) > 0 {
-			return nil, fmt.Errorf("%w: verify %q: %d failure(s), first: %v",
-				errContribution, branch, len(fs), fs[0])
+			// The Failure travels as the cause, so a caller matches the rule it broke
+			// with errors.Is and recovers the claim with errors.As.
+			return nil, ranke.WrapDetail(errContribution,
+				"verify "+branch+": "+strconv.Itoa(len(fs))+" failure(s), first", fs[0])
 		}
 
 		// Deletion leaves an explained gap where a claim's bytes were, and its edges with

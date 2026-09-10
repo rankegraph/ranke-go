@@ -58,10 +58,10 @@ func verifyHeight(ctx context.Context, c Claim, u Universe) error {
 	}
 	got := c.Node().Height()
 	if complete && got != want {
-		return WithDetail(errHeightMismatch, "got "+strconv.FormatUint(got, 10)+", want "+strconv.FormatUint(want, 10))
+		return WithDetail(ErrHeightMismatch, "got "+strconv.FormatUint(got, 10)+", want "+strconv.FormatUint(want, 10))
 	}
 	if !complete && got < want {
-		return WithDetail(errHeightMismatch,
+		return WithDetail(ErrHeightMismatch,
 			"got "+strconv.FormatUint(got, 10)+", want at least "+strconv.FormatUint(want, 10)+" (a deleted reference's height is unrecoverable)")
 	}
 	return nil
