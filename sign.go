@@ -53,10 +53,11 @@ type Keypair struct {
 	Pubkey  []byte // multikey-encoded (see EncodePublicKey)
 }
 
-// LoadPrivateKey loads an Ed25519 PKCS#8 PEM private key from path and
-// pre-computes its multikey-encoded public key.
-func LoadPrivateKey(path string) (Keypair, error) {
-	priv, err := LoadEd25519PrivateKeyPEM(path)
+// ParseKeypair reads an Ed25519 PKCS#8 PEM private key and pre-computes its
+// multikey-encoded public key. Bytes rather than a path, a key arriving as readily
+// from an environment variable, a pipe or a paste (-> keysource).
+func ParseKeypair(pemBytes []byte) (Keypair, error) {
+	priv, err := ParseEd25519PrivateKeyPEM(pemBytes)
 	if err != nil {
 		return Keypair{}, err
 	}
@@ -67,46 +68,77 @@ func LoadPrivateKey(path string) (Keypair, error) {
 	return Keypair{Private: priv, Pubkey: pubkey}, nil
 }
 
-// LoadEd25519PrivateKeyPEM loads an Ed25519 private key from a PKCS#8 PEM
-// file (`openssl genpkey -algorithm ed25519`).
+// LoadPrivateKey is ParseKeypair over the file at path.
+func LoadPrivateKey(path string) (Keypair, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return Keypair{}, WrapDetail(errLoadKeypair, "read "+path, err)
+	}
+	kp, err := ParseKeypair(b)
+	if err != nil {
+		return Keypair{}, WrapDetail(errLoadKeypair, path, err)
+	}
+	return kp, nil
+}
+
+// ParseEd25519PrivateKeyPEM reads an Ed25519 private key from a PKCS#8 PEM block
+// (`openssl genpkey -algorithm ed25519`).
+func ParseEd25519PrivateKeyPEM(pemBytes []byte) (ed25519.PrivateKey, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, WithDetail(errLoadPrivKey, "no PEM block found")
+	}
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, WrapDetail(errLoadPrivKey, "parse PKCS#8", err)
+	}
+	ed, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, WithDetail(errLoadPrivKey, "not an Ed25519 key (got "+reflect.TypeOf(key).String()+")")
+	}
+	return ed, nil
+}
+
+// LoadEd25519PrivateKeyPEM is ParseEd25519PrivateKeyPEM over the file at path.
 func LoadEd25519PrivateKeyPEM(path string) (ed25519.PrivateKey, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, WrapDetail(errLoadPrivKey, "read "+path, err)
 	}
-	block, _ := pem.Decode(b)
-	if block == nil {
-		return nil, WithDetail(errLoadPrivKey, path+": no PEM block found")
-	}
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	ed, err := ParseEd25519PrivateKeyPEM(b)
 	if err != nil {
-		return nil, WrapDetail(errLoadPrivKey, path+": parse PKCS#8", err)
-	}
-	ed, ok := key.(ed25519.PrivateKey)
-	if !ok {
-		return nil, WithDetail(errLoadPrivKey, path+": not an Ed25519 key (got "+reflect.TypeOf(key).String()+")")
+		return nil, WrapDetail(errLoadPrivKey, path, err)
 	}
 	return ed, nil
 }
 
-// LoadEd25519PublicKeyPEM loads an Ed25519 public key from a
-// SubjectPublicKeyInfo PEM file (`openssl pkey -pubout`).
+// ParseEd25519PublicKeyPEM reads an Ed25519 public key from a SubjectPublicKeyInfo
+// PEM block (`openssl pkey -pubout`).
+func ParseEd25519PublicKeyPEM(pemBytes []byte) (ed25519.PublicKey, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, WithDetail(errLoadPubKey, "no PEM block found")
+	}
+	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, WrapDetail(errLoadPubKey, "parse SPKI", err)
+	}
+	ed, ok := key.(ed25519.PublicKey)
+	if !ok {
+		return nil, WithDetail(errLoadPubKey, "not an Ed25519 key (got "+reflect.TypeOf(key).String()+")")
+	}
+	return ed, nil
+}
+
+// LoadEd25519PublicKeyPEM is ParseEd25519PublicKeyPEM over the file at path.
 func LoadEd25519PublicKeyPEM(path string) (ed25519.PublicKey, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, WrapDetail(errLoadPubKey, "read "+path, err)
 	}
-	block, _ := pem.Decode(b)
-	if block == nil {
-		return nil, WithDetail(errLoadPubKey, path+": no PEM block found")
-	}
-	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	ed, err := ParseEd25519PublicKeyPEM(b)
 	if err != nil {
-		return nil, WrapDetail(errLoadPubKey, path+": parse SPKI", err)
-	}
-	ed, ok := key.(ed25519.PublicKey)
-	if !ok {
-		return nil, WithDetail(errLoadPubKey, path+": not an Ed25519 key (got "+reflect.TypeOf(key).String()+")")
+		return nil, WrapDetail(errLoadPubKey, path, err)
 	}
 	return ed, nil
 }
