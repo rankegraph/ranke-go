@@ -69,7 +69,10 @@ func openTestNeo4j(t *testing.T) (*neo4jUniverse, ranke.Id) {
 
 	ctx := context.Background()
 	mem := ranke.NewMemoryUniverse()
-	man, err := generator.Generate(ctx, mem, generator.SpecForSize(1, 30))
+	// Size 8 is ~50 claims: enough to truncate a limit of 10 and to carry the path
+	// depths the query tests assert, and a third of the copy cost of the size that
+	// was here. Each assertion polices its own floor, so a seed too small fails.
+	man, err := generator.Generate(ctx, mem, generator.SpecForSize(1, 8))
 	require.NoError(t, err)
 	require.NoError(t, u.CopyClaims(ctx, mem, []ranke.Id{man.Head}, ranke.WithClosure()))
 	return u, man.Head

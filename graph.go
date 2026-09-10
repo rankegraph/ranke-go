@@ -169,7 +169,7 @@ func (g *graph) Consolidate(ctx context.Context, contributor Contributor, create
 		Contributor: contributor,
 		Edges:       edges,
 		CreatedAt:   firstNonZero(createdAt),
-		Height:      HeightOf(refs...),
+		Height:      FixedHeight(HeightOf(refs...)),
 	}.Sign()
 	if err != nil {
 		return nil, err

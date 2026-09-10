@@ -27,9 +27,9 @@ import (
 const writersEnv = "RANKE_CONCURRENCY"
 
 // defaultWriters is what the fast gate pays for. Enough parallelism that an
-// unsynchronised head would be caught under -race, small enough that a durable
-// backend still finishes in seconds.
-const defaultWriters = 64
+// unsynchronised head is caught under -race, which `make test/full` runs this test
+// under; a higher count without the detector buys interleavings, not detection.
+const defaultWriters = 16
 
 // serialWriters bounds a Sequencer that merges one contribution at a time. Its writers
 // still race — they queue inside the adapter, not in this test — but past a handful

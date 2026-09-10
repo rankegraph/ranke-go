@@ -44,10 +44,6 @@ GOTEST ?= go test
 # (-> tests/backends.Requested); test/full leaves it unset, which means all of them.
 FAST_ROWS ?= mem,fs,sqlite
 
-# The benchmark's size under test/full — the claim count per backend. Bigger is a
-# deliberate run: `make test/performance/2000`.
-FULL_PERF_SIZE ?= 800
-
 # Foundational papers live in the ranke-graph repo. `make docs` pulls a
 # fresh copy into docs/papers/ for local reference; the directory is
 # gitignored and never committed — always fetched, never vendored.
@@ -187,29 +183,36 @@ test/vectors: ## The published cross-implementation conformance vectors (RANKE_T
 # in seconds. It asks for nothing it cannot have — no service rows, so there is
 # nothing to skip and no green covering a backend that never ran.
 #
-# What it deliberately does not do: the performance benchmark, the 10k-claim scale
-# set, and the service rows. `make test/full` is where those live.
+# The service rows live in `make test/full`.
 test: ## Fast gate: one pass over ./..., the rows needing no service (RANKE_ROWS to change)
 	@RANKE_FS_DIR=$(RANKE_FS_DIR) RANKE_ROWS=$(FAST_ROWS) $(GOTEST) ./...
 
-# test/full — everything, and the target CI runs, so the gate and the local run are
-# the same thing. Every backend row is REQUIRED: RANKE_ROWS is unset, so the matrix
-# and the benchmark ask for all of them, and a row that cannot open fails the run
-# rather than skipping. Also the benchmark, the scale set, and the scenario bundles
-# with their docs.
+# test/full — every correctness row, and the target CI runs, so the gate and the
+# local run are the same thing. Every backend row is REQUIRED: RANKE_ROWS is unset,
+# so the matrix asks for all of them, and a row that cannot open fails the run
+# rather than skipping. Also the scenario bundles with their docs, and the
+# concurrency suite under -race — its writer count is sized for the race detector,
+# so this is where the detector runs. The -race pass takes the service-free rows:
+# a race lives in the Sequencer's head handling or an adapter's own concurrency,
+# and those three carry both, for seconds instead of the minute all seven cost.
+#
+# The benchmark and the 10k-claim scale set are development tools: `make
+# test/performance/N` and `bin/ranke-test` drive the first, RANKE_SCALE the second.
+# A gate answers whether the code is correct, which neither of them asks.
 #
 # Needs the services up (services/{neo4j,redis,s3}.sh native up) and the spec
-# fetched (make docs). The 30m timeout is per package: the matrix and the benchmark
-# are minutes each against live services, well past go test's 10m default.
+# fetched (make docs). The 30m timeout is per package: the matrix is minutes
+# against live services, past go test's 10m default.
 #
 # WRITES to the tree: verify-scenarios regenerates conformance/scenarios/*/data/,
 # which `make clean` owns and .gitignore covers.
-# Guarded because it is minutes, CI runs it on every push, and it was being reached
-# for during ordinary work where `make test` was the answer. CI passes the guard by
-# being CI; a person passes it by saying so.
-test/full: full-intended ## Full gate: every backend row, benchmark, 10k-claim scale, scenario docs (needs RANKE_FULL=1)
-	@RANKE_FS_DIR=$(RANKE_FS_DIR) RANKE_PERF_SIZE=$(FULL_PERF_SIZE) RANKE_SCALE=1 \
-		$(GOTEST) -timeout 30m ./...
+# Guarded because CI runs it on every push, and it was being reached for during
+# ordinary work where `make test` was the answer. CI passes the guard by being CI;
+# a person passes it by saying so.
+test/full: full-intended ## Full gate: every backend row, concurrency under -race, scenario docs (needs RANKE_FULL=1)
+	@RANKE_FS_DIR=$(RANKE_FS_DIR) $(GOTEST) -timeout 30m ./...
+	@RANKE_FS_DIR=$(RANKE_FS_DIR) RANKE_ROWS=$(FAST_ROWS) $(GOTEST) -race -timeout 30m \
+		./tests/ -run TestConcurrentContributionsLoseNothing -count=1
 	@$(MAKE) verify-scenarios verify-docs
 
 # full-intended stops a slow run nobody meant to start. GITHUB_ACTIONS and CI are
@@ -217,14 +220,14 @@ test/full: full-intended ## Full gate: every backend row, benchmark, 10k-claim s
 full-intended:
 	@if [ -z "$$GITHUB_ACTIONS$$CI$$RANKE_FULL" ]; then \
 		echo ""; \
-		echo "  make test/full takes MINUTES: every backend row, the benchmark, the"; \
-		echo "  10k-claim scale set, the scenario bundles and their docs."; \
+		echo "  make test/full takes MINUTES: every backend row, the concurrency suite"; \
+		echo "  under -race, the scenario bundles and their docs."; \
 		echo ""; \
 		echo "  During regular work you want:   make test      (seconds)"; \
 		echo "  CI runs test/full on every push, so the slow run happens anyway."; \
 		echo ""; \
 		echo "  Run it yourself ONLY when you touched what the fast gate leaves out —"; \
-		echo "  a service-backed row, the benchmark, the scale set, a scenario bundle."; \
+		echo "  a service-backed row, the concurrency suite, a scenario bundle."; \
 		echo "  Then say so, on whichever target you meant:"; \
 		echo ""; \
 		echo "      RANKE_FULL=1 make $(firstword $(MAKECMDGOALS))"; \

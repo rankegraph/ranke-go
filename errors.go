@@ -65,9 +65,8 @@ var (
 	errDiffEdgeDupName          = errors.New("ranke.NewClaim: duplicate edge name in a diff claim")
 	errTwoContributors          = errors.New("ranke.NewClaim: a claim may carry only one contribution/contributor edge")
 	errTwoDiffEdges             = errors.New("ranke.NewClaim: a claim may carry only one contribution/diff edge")
-	errHeightRequired           = errors.New("ranke.NewClaim: a claim with references must declare its height (use WithHeight or WithAutoHeight)")
+	errHeightRequired           = errors.New("ranke.NewClaim: a claim with references must set Height to a resolver — prefer WithAutoHeight(ctx, u), or HeightsFrom over claims in hand; WithHeight states a value already known")
 	errHeightOnInitial          = errors.New("ranke.NewClaim: an initial claim (no references) must have height 0")
-	errHeightWithAuto           = errors.New("ranke.NewClaim: WithHeight and WithAutoHeight are mutually exclusive")
 
 	// --- Graph ---
 	errNilClaim          = errors.New("ranke: nil claim")
@@ -135,7 +134,7 @@ var (
 	ErrKeyExpired            = errors.New("ranke.verify: claim is dated after its contributor key's pubkey_expires_after")
 	errKeyWindowField        = errors.New("ranke.verify: contributor key validity bound is not RFC 3339")
 	errContributorUnresolved = errors.New("ranke.verify: contributor claim unresolved")
-	errHeightResolve         = errors.New("ranke.NewClaim: resolve reference height for WithAutoHeight")
+	errHeightResolve         = errors.New("ranke.NewClaim: resolve the references' heights")
 	ErrDeleteByNotCopied     = errors.New("ranke.verify: an edge must carry exactly the delete_by its referenced claim declares")
 	ErrStructureNotDeletable = errors.New("ranke: a contribution/* claim carries the graph's structure and its own identity, so it takes no delete_by")
 	errHeightMismatch        = errors.New("ranke.verify: claim height ≠ 1 + max(reference heights)")

@@ -69,7 +69,7 @@ func main() {
 		Encoding:      ranke.EncodingOctetStream,
 		Contributor:   operator,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(operator),
+		Height:        ranke.FixedHeight(ranke.HeightOf(operator)),
 	}.Sign())
 	agent := must(agentClaim.AsContributor(ctx, nil, agentAKey.Private))
 
@@ -80,7 +80,7 @@ func main() {
 		InlineContent: must(helpers.LoadSource("alice_to_bob__apples.eml")),
 		Contributor:   operator,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(operator),
+		Height:        ranke.FixedHeight(ranke.HeightOf(operator)),
 	}.Sign())
 	emailFamily := must(ranke.ClaimBuilder{
 		Type:          ranke.TypeSource("email"),
@@ -88,7 +88,7 @@ func main() {
 		InlineContent: must(helpers.LoadSource("alice_to_bob__family.eml")),
 		Contributor:   operator,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(operator),
+		Height:        ranke.FixedHeight(ranke.HeightOf(operator)),
 	}.Sign())
 
 	// --- 4. Agent: summary derivation of the apples email. ---
@@ -98,7 +98,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   agent,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(agent, emailApples),
+		Height:        ranke.FixedHeight(ranke.HeightOf(agent, emailApples)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailApples.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -112,7 +112,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   agent,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(agent, emailApples),
+		Height:        ranke.FixedHeight(ranke.HeightOf(agent, emailApples)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailApples.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -124,7 +124,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   agent,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(agent, emailApples),
+		Height:        ranke.FixedHeight(ranke.HeightOf(agent, emailApples)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailApples.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -136,7 +136,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   agent,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(agent, emailApples),
+		Height:        ranke.FixedHeight(ranke.HeightOf(agent, emailApples)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailApples.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -148,7 +148,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   agent,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(agent, emailFamily),
+		Height:        ranke.FixedHeight(ranke.HeightOf(agent, emailFamily)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailFamily.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -174,7 +174,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   agent,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(agent, emailApples, alice, apples),
+		Height:        ranke.FixedHeight(ranke.HeightOf(agent, emailApples, alice, apples)),
 		Edges: []ranke.Edge{
 			must(ranke.NewEdge(ranke.EdgeConfig{Reference: emailApples.ID(), Type: ranke.TypeDerivation("source")})),
 			must(ranke.NewEdge(ranke.EdgeConfig{Reference: alice.ID(), Type: ranke.TypeRelation("likes"), RelationDirection: ranke.RelationFrom, Fields: strong})),
@@ -187,7 +187,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   agent,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(agent, emailApples, alice, bobSr),
+		Height:        ranke.FixedHeight(ranke.HeightOf(agent, emailApples, alice, bobSr)),
 		Edges: []ranke.Edge{
 			must(ranke.NewEdge(ranke.EdgeConfig{Reference: emailApples.ID(), Type: ranke.TypeDerivation("source")})),
 			must(ranke.NewEdge(ranke.EdgeConfig{Reference: alice.ID(), Type: ranke.TypeRelation("knows"), RelationDirection: ranke.RelationFrom, Fields: strong})),
@@ -200,7 +200,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   agent,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(agent, emailApples, bobSr, alice),
+		Height:        ranke.FixedHeight(ranke.HeightOf(agent, emailApples, bobSr, alice)),
 		Edges: []ranke.Edge{
 			must(ranke.NewEdge(ranke.EdgeConfig{Reference: emailApples.ID(), Type: ranke.TypeDerivation("source")})),
 			must(ranke.NewEdge(ranke.EdgeConfig{Reference: bobSr.ID(), Type: ranke.TypeRelation("ignores"), RelationDirection: ranke.RelationFrom, Fields: weak})),
@@ -213,7 +213,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   agent,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(agent, emailFamily, bobSr, bobJr),
+		Height:        ranke.FixedHeight(ranke.HeightOf(agent, emailFamily, bobSr, bobJr)),
 		Edges: []ranke.Edge{
 			must(ranke.NewEdge(ranke.EdgeConfig{Reference: emailFamily.ID(), Type: ranke.TypeDerivation("source")})),
 			// Symmetric: both members are RelationFrom (§4.7).

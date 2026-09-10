@@ -551,17 +551,20 @@ func TestBuilderHeightRejectedOnInitialClaim(t *testing.T) {
 	require.ErrorIs(t, err, errHeightOnInitial)
 }
 
-// TestBuilderHeightAndAutoExclusive: WithHeight and WithAutoHeight cannot both
-// be set.
-func TestBuilderHeightAndAutoExclusive(t *testing.T) {
+// TestBuilderHeightLastSetterWins: Height is one slot holding a resolver, so the
+// last setter answers — WithHeight being FixedHeight under another name.
+func TestBuilderHeightLastSetterWins(t *testing.T) {
+	ctx := context.Background()
 	alice := contributor(t)
-	_, err := NewClaim(TypeSource("note"), alice).
-		WithInlineContent([]byte("body")).
-		WithEncoding(EncodingPlain).
-		WithHeight(1).
-		WithAutoHeight(context.Background(), NewMemoryUniverse()).
-		Sign()
-	require.ErrorIs(t, err, errHeightWithAuto)
+	build := func(b ClaimBuilder) uint64 {
+		c, err := b.WithInlineContent([]byte("body")).WithEncoding(EncodingPlain).Sign()
+		require.NoError(t, err)
+		return c.Node().Height()
+	}
+	require.Equal(t, uint64(3), build(NewClaim(TypeSource("note"), alice).
+		WithHeight(7).WithHeightResolver(ctx, FixedHeight(3))), "the resolver set last")
+	require.Equal(t, uint64(7), build(NewClaim(TypeSource("note"), alice).
+		WithHeightResolver(ctx, FixedHeight(3)).WithHeight(7)), "the value set last")
 }
 
 // TestBuilderWithAutoHeight: WithAutoHeight reads each referenced claim's
@@ -582,6 +585,85 @@ func TestBuilderWithAutoHeight(t *testing.T) {
 		Sign()
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), b.Node().Height(), "1 + max(contributor 0, source 1)")
+}
+
+// TestBuilderWithHeightResolver: the resolver is asked about every reference the
+// closed claim carries — the contributor edge included — because the assembled edge
+// set is its input, not anything the caller restates.
+func TestBuilderWithHeightResolver(t *testing.T) {
+	ctx := context.Background()
+	root := contributor(t)      // height 0
+	a := srcClaim(t, root, "a") // height 1
+
+	var asked []string
+	resolve := func(c context.Context, refs []Id) (uint64, error) {
+		for _, r := range refs {
+			asked = append(asked, r.String())
+		}
+		return HeightsFrom(root, a)(c, refs)
+	}
+
+	b, err := NewClaim(TypeEntity("person"), root).
+		WithInlineContent([]byte("b")).
+		WithEncoding(EncodingPlain).
+		WithEdges(mustDerivEdge(t, a)).
+		WithHeightResolver(ctx, resolve).
+		Sign()
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), b.Node().Height(), "1 + max(contributor 0, source 1)")
+	require.ElementsMatch(t, []string{root.ID().String(), a.ID().String()}, asked,
+		"the whole edge set reaches the resolver, contributor included")
+}
+
+// TestBuilderHeightsFromReportsAnAbsentReference: a claim citing what the resolver
+// was not given fails to build, rather than taking a height over the rest.
+func TestBuilderHeightsFromReportsAnAbsentReference(t *testing.T) {
+	root := contributor(t)
+	a := srcClaim(t, root, "a")
+
+	_, err := NewClaim(TypeEntity("person"), root).
+		WithInlineContent([]byte("b")).
+		WithEncoding(EncodingPlain).
+		WithEdges(mustDerivEdge(t, a)).
+		WithHeightResolver(context.Background(), HeightsFrom(root)). // a withheld
+		Sign()
+	require.ErrorIs(t, err, ErrNotFound)
+	require.ErrorIs(t, err, errHeightResolve)
+}
+
+// TestBuilderHeightResolverFailureReaches: a resolver's own error surfaces as the
+// build's, matchable through errHeightResolve.
+func TestBuilderHeightResolverFailureReaches(t *testing.T) {
+	_, err := NewClaim(TypeSource("note"), contributor(t)).
+		WithInlineContent([]byte("body")).
+		WithEncoding(EncodingPlain).
+		WithHeightResolver(context.Background(),
+			func(context.Context, []Id) (uint64, error) { return 0, ErrUnsupported }).
+		Sign()
+	require.ErrorIs(t, err, errHeightResolve)
+	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// TestBuilderHeightResolverIsSugarForAutoHeight: WithAutoHeight is HeightsIn over the
+// Universe, so the two setters agree on the same archive.
+func TestBuilderHeightResolverIsSugarForAutoHeight(t *testing.T) {
+	ctx := context.Background()
+	u := NewMemoryUniverse()
+	root := contributor(t)
+	a := srcClaim(t, root, "a")
+	require.NoError(t, PutClaim(ctx, u, root))
+	require.NoError(t, PutClaim(ctx, u, a))
+
+	build := func(b ClaimBuilder) uint64 {
+		c, err := b.WithInlineContent([]byte("b")).WithEncoding(EncodingPlain).
+			WithEdges(mustDerivEdge(t, a)).WithCreatedAt(time.Unix(1, 0).UTC()).Sign()
+		require.NoError(t, err)
+		return c.Node().Height()
+	}
+	viaUniverse := build(NewClaim(TypeEntity("person"), root).WithAutoHeight(ctx, u))
+	viaResolver := build(NewClaim(TypeEntity("person"), root).
+		WithHeightResolver(ctx, HeightsIn(u)))
+	require.Equal(t, viaUniverse, viaResolver)
 }
 
 // TestHeightOf: the construction helper is 1 + max, or 0 for no references.

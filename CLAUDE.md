@@ -30,12 +30,14 @@ CI runs `test/full` on what you push, so the thorough run happens without you
 spending the minutes on it.
 
 - `make test` — the fast gate: one pass over `./...`, the rows that need no
-  service (`RANKE_ROWS=mem,fs,sqlite`), no benchmark and no 10k-claim scale set.
-  Seconds, and the cache works.
-- `make test/full` — everything: every row required, the benchmark, the scale
-  set, the scenarios and their docs. Minutes, and CI runs it on every push, so
-  run it when you have touched what the fast gate leaves out — a service-backed
-  row, the benchmark, the scale set, a scenario bundle — and not otherwise.
+  service (`RANKE_ROWS=mem,fs,sqlite`). Seconds, and the cache works.
+- `make test/full` — every correctness row required, the concurrency suite under
+  `-race`, the scenarios and their docs. CI runs it on every push, so run it when
+  you have touched what the fast gate leaves out — a service-backed row, the
+  concurrency suite, a scenario bundle — and not otherwise.
+  The benchmark and the 10k-claim scale set are development tools, driven by
+  `make test/performance/N` / `bin/ranke-test` and `RANKE_SCALE=1`; a gate answers
+  whether the code is correct, which neither of them asks.
 - `make test/matrix` — the matrix alone, verbose, over every row. A row it asks
   for and cannot open FAILS; narrow the set with `RANKE_ROWS=mem,fs,sqlite` when
   the services are not up.

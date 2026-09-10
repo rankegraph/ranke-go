@@ -62,7 +62,7 @@ func main() {
 		InlineContent: must(helpers.LoadSource("alice_to_bob__apples.eml")),
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice)),
 	}.Sign())
 	emailFamily := must(ranke.ClaimBuilder{
 		Type:          ranke.TypeSource("email"),
@@ -70,7 +70,7 @@ func main() {
 		InlineContent: must(helpers.LoadSource("alice_to_bob__family.eml")),
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice)),
 	}.Sign())
 
 	// --- 3. A summary derivation of the apples email. ---
@@ -80,7 +80,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice, emailApples),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice, emailApples)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailApples.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -94,7 +94,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice, emailApples),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice, emailApples)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailApples.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -106,7 +106,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice, emailApples),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice, emailApples)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailApples.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -118,7 +118,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice, emailApples, aliceEntity, applesEntity),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice, emailApples, aliceEntity, applesEntity)),
 		Edges: []ranke.Edge{
 			must(ranke.NewEdge(ranke.EdgeConfig{
 				Reference: emailApples.ID(),
@@ -144,7 +144,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice, emailApples),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice, emailApples)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailApples.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -156,7 +156,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice, emailApples, aliceEntity, bobSr),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice, emailApples, aliceEntity, bobSr)),
 		Edges: []ranke.Edge{
 			must(ranke.NewEdge(ranke.EdgeConfig{
 				Reference: emailApples.ID(),
@@ -182,7 +182,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice, emailFamily),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice, emailFamily)),
 		Edges: []ranke.Edge{must(ranke.NewEdge(ranke.EdgeConfig{
 			Reference: emailFamily.ID(),
 			Type:      ranke.TypeDerivation("source"),
@@ -194,7 +194,7 @@ func main() {
 		Encoding:      ranke.EncodingPlain,
 		Contributor:   alice,
 		CreatedAt:     s.NextTimestamp(time.Second),
-		Height:        ranke.HeightOf(alice, emailFamily, bobSr, bobJr),
+		Height:        ranke.FixedHeight(ranke.HeightOf(alice, emailFamily, bobSr, bobJr)),
 		Edges: []ranke.Edge{
 			must(ranke.NewEdge(ranke.EdgeConfig{
 				Reference: emailFamily.ID(),
