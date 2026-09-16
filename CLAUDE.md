@@ -106,6 +106,26 @@ that works here:
   {{.TestImports}}' ./...` is authoritative. A text search is not: it misses
   build constraints and cannot tell a test import from a real one.
 
+# Verification never signs
+
+A verifier hashes the record as it was received and checks the signature over those
+bytes. It re-encodes nothing and re-signs nothing. Two things follow, and both get
+argued wrong:
+
+- **Any valid signature is a publishable vector.** How a signature's nonce was chosen
+  is the signer's business and reaches nobody downstream, so "ECDSA is randomised" is
+  never a reason to leave a scheme out of the conformance set. Where the *generator*
+  needs byte-identical output on a re-run (it does — `TestVectorsAreReproducible`),
+  it signs with a deterministic nonce of its own: `cmd/vectors`'s `p256Signer` holds a
+  key derived from a fixed scalar and signs RFC 6979. The library does NOT promise
+  that, and no rule asks it to — the foundation paper dropped "deterministic" from
+  `Sign` when `V-SIGN` gained ECDSA.
+- **An encoder change moves every id; a new signing scheme moves none.** Claims
+  already written keep verifying byte for byte, which is why adding ES256 left the
+  scenario references and the published set untouched. What a new scheme owes is a
+  case IN the set, so an implementation cannot pass while rejecting every record made
+  under it.
+
 # Versioning
 
 The bump word is the maintainer's, chosen at release time: `make release <fix|minor|major>`.

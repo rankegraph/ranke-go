@@ -8,11 +8,17 @@ package main
 
 import (
 	"context"
+	"crypto"
+	"crypto/ecdh"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"math/big"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -176,9 +182,43 @@ func signer(seed string) ed25519.PrivateKey {
 	return ed25519.NewKeyFromSeed(h[:])
 }
 
+// p256Signer derives a fixed P-256 key from seed, the scalar being the seed's hash and
+// the point it multiplies to. An implementation reading the set verifies and never
+// signs, so the nonce is this program's business — and a nonce that reproduces is what
+// keeps regenerating the set a no-op (`V-SIGN`).
+func p256Signer(seed string) (crypto.Signer, error) {
+	h := sha256.Sum256([]byte(seed))
+	k, err := ecdh.P256().NewPrivateKey(h[:])
+	if err != nil {
+		return nil, err
+	}
+	point := k.PublicKey().Bytes() // 0x04 || X || Y, uncompressed
+	priv := &ecdsa.PrivateKey{
+		PublicKey: ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     new(big.Int).SetBytes(point[1:33]),
+			Y:     new(big.Int).SetBytes(point[33:]),
+		},
+		D: new(big.Int).SetBytes(h[:]),
+	}
+	return fixedNonce{priv}, nil
+}
+
+// fixedNonce signs deterministically (RFC 6979), whatever randomness it is handed.
+type fixedNonce struct{ priv *ecdsa.PrivateKey }
+
+func (f fixedNonce) Public() crypto.PublicKey { return f.priv.Public() }
+
+func (f fixedNonce) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+	if opts == nil {
+		opts = crypto.SHA256 // what ES256 hashes with, and a nil rand needs it named
+	}
+	return f.priv.Sign(nil, digest, opts)
+}
+
 // contributorClaim builds a root contributor: an initial claim whose content is its
 // own multikey pubkey (§5.7), signed by the key it publishes.
-func contributorClaim(ctx context.Context, priv ed25519.PrivateKey, at time.Time) (ranke.Claim, ranke.Contributor, error) {
+func contributorClaim(ctx context.Context, priv crypto.Signer, at time.Time) (ranke.Claim, ranke.Contributor, error) {
 	pub, err := ranke.EncodePublicKey(priv.Public())
 	if err != nil {
 		return nil, nil, err

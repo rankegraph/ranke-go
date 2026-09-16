@@ -1,10 +1,12 @@
 package ranke
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"os"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/multiformats/go-multicodec"
 	"github.com/stretchr/testify/require"
+	cose "github.com/veraison/go-cose"
 )
 
 // Foundation unit tests for the signing primitives exercised DIRECTLY — no Graph, no
@@ -24,6 +27,16 @@ import (
 func ed25519Keys(t *testing.T) (ed25519.PrivateKey, []byte) {
 	t.Helper()
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	pubkey, err := EncodePublicKey(priv.Public())
+	require.NoError(t, err)
+	return priv, pubkey
+}
+
+// p256Keys is ed25519Keys for the second scheme `V-SIGN` names.
+func p256Keys(t *testing.T) (*ecdsa.PrivateKey, []byte) {
+	t.Helper()
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	pubkey, err := EncodePublicKey(priv.Public())
 	require.NoError(t, err)
@@ -51,12 +64,51 @@ func TestEncodeDecodePublicKeyRoundTrip(t *testing.T) {
 }
 
 // TestEncodePublicKeyRejectsUnsupported: a key type the scheme table
-// doesn't know is refused, not silently mis-encoded.
+// doesn't know is refused, not silently mis-encoded. `V-SIGN` names ECDSA over P-256
+// alone, so another curve is as foreign as another algorithm.
 func TestEncodePublicKeyRejectsUnsupported(t *testing.T) {
-	ec, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	ec, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	require.NoError(t, err)
 	_, err = EncodePublicKey(ec.Public())
-	require.Error(t, err, "ECDSA is not a supported signing scheme")
+	require.Error(t, err, "P-384 is not a curve `V-SIGN` names")
+
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	_, err = EncodePublicKey(rsaKey.Public())
+	require.Error(t, err, "RSA is not a scheme `V-SIGN` names")
+}
+
+// TestEncodeDecodeP256RoundTrip: a P-256 key frames as the compressed point under
+// `p256-pub` and decodes back to the same key (`V-SIGN`).
+func TestEncodeDecodeP256RoundTrip(t *testing.T) {
+	priv, pubkey := p256Keys(t)
+
+	require.Len(t, pubkey, 2+p256PubSize, "the varint 0x1200 is two bytes, the point 33")
+	code, decoded, err := DecodePublicKey(pubkey)
+	require.NoError(t, err)
+	require.Equal(t, multicodec.P256Pub, code, "scheme is named in the encoding")
+	ecPub, ok := decoded.(*ecdsa.PublicKey)
+	require.True(t, ok, "decodes to an ECDSA public key")
+	require.True(t, priv.PublicKey.Equal(ecPub), "the key survives the round-trip")
+}
+
+// TestDecodeP256RejectsBadPoint: a p256-pub framing of the right length whose bytes are
+// no point on the curve is refused — a key nothing could ever verify under.
+func TestDecodeP256RejectsBadPoint(t *testing.T) {
+	_, pubkey := p256Keys(t)
+	// An x above the field prime names no point at all, whichever parity claims it.
+	offCurve := make([]byte, p256PubSize)
+	for i := range offCurve {
+		offCurve[i] = 0xff
+	}
+	offCurve[0] = 0x02
+
+	_, _, err := DecodePublicKey(prependCode(multicodec.P256Pub, offCurve))
+	require.Error(t, err, "a point off the curve is not a key")
+
+	short := append([]byte(nil), pubkey[:len(pubkey)-1]...)
+	_, _, err = DecodePublicKey(short)
+	require.Error(t, err, "a compressed P-256 point is 33 bytes")
 }
 
 // TestDecodePublicKeyRejectsWrongLength: a well-framed ed25519 multikey
@@ -78,6 +130,69 @@ func TestSignVerifyRoundTrip(t *testing.T) {
 	env, err := signEnvelope(priv, []byte("the record bytes"))
 	require.NoError(t, err)
 	require.NoError(t, verifyEnvelope(pubkey, env), "an honest envelope must verify")
+}
+
+// TestSignVerifyP256RoundTrip: the second scheme `V-SIGN` names seals and verifies the
+// same way, its envelope naming ES256 where Ed25519's names EdDSA.
+func TestSignVerifyP256RoundTrip(t *testing.T) {
+	priv, pubkey := p256Keys(t)
+
+	env, err := signEnvelope(priv, []byte("the record bytes"))
+	require.NoError(t, err)
+	require.NoError(t, verifyEnvelope(pubkey, env), "an honest envelope must verify")
+
+	msg, err := decodeEnvelope(env)
+	require.NoError(t, err)
+	alg, err := msg.Headers.Protected.Algorithm()
+	require.NoError(t, err)
+	require.Equal(t, cose.AlgorithmES256, alg, "a P-256 key signs under ES256")
+}
+
+// TestVerifyRejectsSchemeDisagreement: a claim names its scheme twice, and the two MUST
+// agree (`V-SIGN`) — so an EdDSA envelope presented with a p256-pub key is refused, and
+// an ES256 one presented with an ed25519-pub key likewise, before any curve math runs.
+func TestVerifyRejectsSchemeDisagreement(t *testing.T) {
+	edPriv, edPubkey := ed25519Keys(t)
+	ecPriv, ecPubkey := p256Keys(t)
+
+	edEnv, err := signEnvelope(edPriv, []byte("signed under EdDSA"))
+	require.NoError(t, err)
+	require.ErrorIs(t, verifyEnvelope(ecPubkey, edEnv), ErrEnvelopeScheme,
+		"an EdDSA header does not answer for a key framed as p256-pub")
+
+	ecEnv, err := signEnvelope(ecPriv, []byte("signed under ES256"))
+	require.NoError(t, err)
+	require.ErrorIs(t, verifyEnvelope(edPubkey, ecEnv), ErrEnvelopeScheme,
+		"an ES256 header does not answer for a key framed as ed25519-pub")
+}
+
+// TestDecodeEnvelopeRejectsForeignAlgorithm: `V-SIGN` names two schemes, so an envelope
+// under a third is refused as it is read, before a key is ever resolved.
+func TestDecodeEnvelopeRejectsForeignAlgorithm(t *testing.T) {
+	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+	signer, err := cose.NewSigner(cose.AlgorithmES384, priv)
+	require.NoError(t, err)
+
+	msg := cose.NewSign1Message()
+	msg.Payload = []byte("signed under a scheme the spec does not name")
+	msg.Headers.Protected[cose.HeaderLabelAlgorithm] = cose.AlgorithmES384
+	require.NoError(t, msg.Sign(rand.Reader, nil, signer))
+	raw, err := msg.MarshalCBOR()
+	require.NoError(t, err)
+
+	_, err = decodeEnvelope(raw)
+	require.ErrorIs(t, err, ErrEnvelopeScheme, "ES384 is not a scheme `V-SIGN` names")
+}
+
+// TestSignRejectsForeignScheme: a key outside the two is refused at sealing, so no
+// envelope nothing can verify is ever produced.
+func TestSignRejectsForeignScheme(t *testing.T) {
+	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+
+	_, err = signEnvelope(priv, []byte("x"))
+	require.Error(t, err, "P-384 is not a curve `V-SIGN` names")
 }
 
 // TestVerifyRejectsTamperedPayload: the signature covers the payload, so swapping it
@@ -170,6 +285,85 @@ func TestLoadEd25519PEM(t *testing.T) {
 	loadedPub, err := LoadEd25519PublicKeyPEM(pubPath)
 	require.NoError(t, err)
 	require.Equal(t, pub, loadedPub, "public key round-trips through PEM")
+}
+
+// TestParseKeypairP256PEM: a P-256 PKCS#8 PEM is a keypair too, framed as p256-pub,
+// and it signs an envelope that verifies under the pubkey it precomputed.
+func TestParseKeypairP256PEM(t *testing.T) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKCS8PrivateKey(priv)
+	require.NoError(t, err)
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+
+	kp, err := ParseKeypair(pemBytes)
+	require.NoError(t, err)
+	code, _, err := DecodePublicKey(kp.Pubkey)
+	require.NoError(t, err)
+	require.Equal(t, multicodec.P256Pub, code, "the framing names the scheme the key is under")
+
+	env, err := signEnvelope(kp.Private, []byte("sealed by the loaded key"))
+	require.NoError(t, err)
+	require.NoError(t, verifyEnvelope(kp.Pubkey, env))
+}
+
+// TestParsePublicKeyPEMBothSchemes: a public key arrives as a PEM under either scheme,
+// and EncodePublicKey frames what comes back — which is how a contributor's pubkey is
+// read from `openssl pkey -pubout`.
+func TestParsePublicKeyPEMBothSchemes(t *testing.T) {
+	dir := t.TempDir()
+	edPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	ecPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	for name, tc := range map[string]struct {
+		pub  crypto.PublicKey
+		code multicodec.Code
+	}{
+		"ed25519": {edPub, multicodec.Ed25519Pub},
+		"p256":    {ecPriv.Public(), multicodec.P256Pub},
+	} {
+		t.Run(name, func(t *testing.T) {
+			der, err := x509.MarshalPKIXPublicKey(tc.pub)
+			require.NoError(t, err)
+			path := filepath.Join(dir, name+".pem")
+			require.NoError(t, os.WriteFile(path,
+				pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}), 0o600))
+
+			loaded, err := LoadPublicKeyPEM(path)
+			require.NoError(t, err)
+			framed, err := EncodePublicKey(loaded)
+			require.NoError(t, err)
+			code, _, err := DecodePublicKey(framed)
+			require.NoError(t, err)
+			require.Equal(t, tc.code, code, "the framing names the scheme the PEM held")
+		})
+	}
+}
+
+// TestParsePublicKeyPEMRejectsForeignScheme: a SPKI PEM outside the two schemes is
+// refused at the loader.
+func TestParsePublicKeyPEMRejectsForeignScheme(t *testing.T) {
+	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKIXPublicKey(priv.Public())
+	require.NoError(t, err)
+
+	_, err = ParsePublicKeyPEM(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}))
+	require.Error(t, err, "P-384 is not a curve `V-SIGN` names")
+}
+
+// TestParsePrivateKeyPEMRejectsForeignScheme: a PKCS#8 PEM holding a key outside the
+// two schemes is refused at the loader, not at the first signature.
+func TestParsePrivateKeyPEMRejectsForeignScheme(t *testing.T) {
+	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKCS8PrivateKey(priv)
+	require.NoError(t, err)
+
+	_, err = ParseKeypair(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	require.Error(t, err, "P-384 is not a curve `V-SIGN` names")
 }
 
 // TestLoadEd25519PEMErrors: a missing file and a non-PEM file are rejected.

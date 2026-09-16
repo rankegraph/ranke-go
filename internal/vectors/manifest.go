@@ -29,6 +29,9 @@ const (
 	ReasonBothContent     = "content_both_slots"
 	ReasonEdgeOrder       = "edge_order"
 	ReasonDatedForm       = "dated_form"
+	// A record naming one signature scheme in its header and another in its pubkey's
+	// framing, which `V-SIGN` requires to agree.
+	ReasonSignatureScheme = "signature_scheme"
 	// The first branch table's fixed height, read off the record alone.
 	ReasonFirstTableHeight = "first_table_height"
 	// The bookmark codes, one per rule a 𝒰_hist record can break.
@@ -46,7 +49,7 @@ var AllReasons = []string{
 	ReasonOK, ReasonIDMismatch, ReasonWrongMessage, ReasonMalformedID,
 	ReasonNotEnveloped, ReasonNoContributor, ReasonHeightWrong,
 	ReasonContentMismatch, ReasonTimestampForm, ReasonBothContent, ReasonEdgeOrder,
-	ReasonDatedForm, ReasonFirstTableHeight,
+	ReasonDatedForm, ReasonSignatureScheme, ReasonFirstTableHeight,
 	ReasonBookmarkForm, ReasonBookmarkSignature, ReasonBookmarkSlot,
 	ReasonBookmarkReference, ReasonBookmarkGap,
 }

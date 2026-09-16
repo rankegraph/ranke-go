@@ -8,7 +8,9 @@ package ranke
 
 import (
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"reflect"
 	"strconv"
 
@@ -31,16 +33,17 @@ func signCOSE(signingKey crypto.Signer, payload []byte, extra cose.ProtectedHead
 	if signingKey == nil {
 		return nil, errEnvelopeNoKey
 	}
-	if _, ok := signingKey.Public().(ed25519.PublicKey); !ok {
-		return nil, WithDetail(errSignEnvelope, "unsupported signer public key type "+reflect.TypeOf(signingKey.Public()).String())
+	alg, err := signatureAlgorithm(signingKey.Public())
+	if err != nil {
+		return nil, WrapDetail(errSignEnvelope, "signer", err)
 	}
-	signer, err := cose.NewSigner(cose.AlgorithmEd25519, signingKey)
+	signer, err := cose.NewSigner(alg, signingKey)
 	if err != nil {
 		return nil, WrapDetail(errSignEnvelope, "signer", err)
 	}
 	msg := cose.NewSign1Message()
 	msg.Payload = payload
-	msg.Headers.Protected[cose.HeaderLabelAlgorithm] = cose.AlgorithmEd25519
+	msg.Headers.Protected[cose.HeaderLabelAlgorithm] = alg
 	for label, value := range extra {
 		msg.Headers.Protected[label] = value
 	}
@@ -78,7 +81,9 @@ func verifyEnvelope(pubkey, raw []byte) error {
 }
 
 // verifySign1 checks msg's signature against a multikey pubkey (`V-SIGN`), whatever
-// shape of record the message carries.
+// shape of record the message carries. A claim names its scheme twice — in the
+// protected header and in the key's framing — and the two must agree, so a signature
+// made under one scheme cannot be presented as the other's.
 func verifySign1(pubkey []byte, msg *cose.Sign1Message) error {
 	if len(pubkey) == 0 {
 		return errEnvelopeNoPubkey
@@ -87,11 +92,18 @@ func verifySign1(pubkey []byte, msg *cose.Sign1Message) error {
 	if err != nil {
 		return WrapDetail(errVerifyEnvelope, "decode pubkey", err)
 	}
-	edPub, ok := pub.(ed25519.PublicKey)
-	if !ok {
-		return WithDetail(errVerifyEnvelope, "ed25519 pubkey type "+reflect.TypeOf(pub).String())
+	keyAlg, err := signatureAlgorithm(pub)
+	if err != nil {
+		return WrapDetail(errVerifyEnvelope, "pubkey", err)
 	}
-	verifier, err := cose.NewVerifier(cose.AlgorithmEd25519, edPub)
+	headerAlg, err := msg.Headers.Protected.Algorithm()
+	if err != nil {
+		return WrapDetail(errVerifyEnvelope, "header algorithm", err)
+	}
+	if headerAlg != keyAlg {
+		return WithDetail(ErrEnvelopeScheme, "header names "+headerAlg.String()+", the pubkey is framed for "+keyAlg.String())
+	}
+	verifier, err := cose.NewVerifier(keyAlg, pub)
 	if err != nil {
 		return WrapDetail(errVerifyEnvelope, "verifier", err)
 	}
@@ -99,6 +111,22 @@ func verifySign1(pubkey []byte, msg *cose.Sign1Message) error {
 		return WrapDetail(errVerifyEnvelope, "verify", err)
 	}
 	return nil
+}
+
+// signatureAlgorithm is the COSE algorithm a key signs and verifies under, the pairing
+// `V-SIGN` fixes: Ed25519 signs as `EdDSA`, P-256 as `ES256`.
+func signatureAlgorithm(pub crypto.PublicKey) (cose.Algorithm, error) {
+	switch k := pub.(type) {
+	case ed25519.PublicKey:
+		return cose.AlgorithmEd25519, nil
+	case *ecdsa.PublicKey:
+		if k.Curve != elliptic.P256() {
+			return 0, WithDetail(ErrEnvelopeScheme, "ECDSA over "+k.Curve.Params().Name+", and `V-SIGN` names P-256")
+		}
+		return cose.AlgorithmES256, nil
+	default:
+		return 0, WithDetail(ErrEnvelopeScheme, "public key type "+reflect.TypeOf(pub).String())
+	}
 }
 
 // decodeEnvelope parses the stored bytes as a COSE_Sign1, and holds the headers to alg
@@ -113,8 +141,12 @@ func decodeEnvelope(raw []byte) (*cose.Sign1Message, error) {
 		return nil, WithDetail(ErrEnvelopeHeaders, "unprotected header carries "+
 			strconv.Itoa(len(msg.Headers.Unprotected))+" parameter(s), want none")
 	}
-	if _, ok := msg.Headers.Protected[cose.HeaderLabelAlgorithm]; !ok {
-		return nil, WithDetail(ErrEnvelopeHeaders, "protected header names no algorithm")
+	alg, err := msg.Headers.Protected.Algorithm()
+	if err != nil {
+		return nil, WrapDetail(ErrEnvelopeHeaders, "protected header algorithm", err)
+	}
+	if alg != cose.AlgorithmEd25519 && alg != cose.AlgorithmES256 {
+		return nil, WithDetail(ErrEnvelopeScheme, "header names "+alg.String())
 	}
 	if len(msg.Headers.Protected) != 1 {
 		return nil, WithDetail(ErrEnvelopeHeaders, "protected header carries "+
