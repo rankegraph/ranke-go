@@ -161,7 +161,7 @@ var (
 	errLoadPrivKey           = errors.New("ranke.LoadEd25519PrivateKeyPEM")
 	ErrKeyEncrypted          = errors.New("ranke: the key is encrypted, and decrypting one is the caller's (openssl pkcs8 -topk8 -nocrypt)")
 	ErrKeyFormat             = errors.New("ranke: the key is not a PKCS#8 PEM (openssl pkcs8 -topk8 converts one)")
-	errLoadPubKey            = errors.New("ranke.LoadEd25519PublicKeyPEM")
+	errLoadPubKey            = errors.New("ranke.LoadPublicKeyPEM")
 	errVerifyContentOp       = errors.New("ranke.VerifyContent")
 	errVerifyingReader       = errors.New("ranke.NewVerifyingReader")
 	errContent               = errors.New("ranke: content")
@@ -176,9 +176,12 @@ var (
 
 	// --- ADT shape, checked wherever a claim arrives rather than at the builder
 	// alone: a record decoded or assembled meets these too.
-	ErrContentBothSlots  = errors.New("ranke: a record carries both content and content_hash, which are mutually exclusive")
-	ErrIDMismatch        = errors.New("ranke.verify: the claim's id is not the hash of the envelope it is stored as")
-	ErrEnvelopeHeaders   = errors.New("ranke: an envelope carries the alg parameter alone, protected, and an empty unprotected header (`V-ENV`)")
+	ErrContentBothSlots = errors.New("ranke: a record carries both content and content_hash, which are mutually exclusive")
+	ErrIDMismatch       = errors.New("ranke.verify: the claim's id is not the hash of the envelope it is stored as")
+	ErrEnvelopeHeaders  = errors.New("ranke: an envelope carries the alg parameter alone, protected, and an empty unprotected header (`V-ENV`)")
+	// ErrEnvelopeScheme: a claim names its scheme in the protected header and again in
+	// its pubkey's framing, and `V-SIGN` admits two — Ed25519 as EdDSA, P-256 as ES256.
+	ErrEnvelopeScheme    = errors.New("ranke: a claim is signed under Ed25519 (EdDSA) or ECDSA over P-256 (ES256), and the header and the pubkey framing name the same one (`V-SIGN`)")
 	ErrEdgeOrder         = errors.New("ranke.verify: a claim's edges are inlined ascending by id(e) (`V-EORDER`)")
 	ErrUnknownTypeClass  = errors.New("ranke.verify: type class is not one of the fixed set")
 	ErrRelationDirection = errors.New("ranke.verify: a relation/* edge carries relation_direction 1 or -1, an edge of any other class 0")

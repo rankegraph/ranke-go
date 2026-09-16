@@ -12,14 +12,14 @@ import (
 	"strconv"
 )
 
-// branchNameMax bounds a branch name, as `R-FIELDS` bounds a field name: the label
-// rides in every table of the spine, so an unbounded one is carried forever.
+// branchNameMax bounds a branch name, as `R-BRANCHNAME` fixes it: the label rides in
+// every table of the spine, so an unbounded one is carried for the archive's life.
 const branchNameMax = 128
 
-// ValidateBranchName holds a branch label to the form `R-FIELDS` gives a name —
-// `[a-z0-9_]`, no leading underscore, at most 128 bytes. The charset admits no `$`,
-// so a branch can never take a reserved target's name (BranchArchive, BranchUniverse,
-// TargetBranches) and be shadowed by it at read time.
+// ValidateBranchName holds a branch label to the form `R-BRANCHNAME` gives it, which is
+// the form `R-FIELDS` gives a field name — `[a-z0-9_]`, no leading underscore, at most
+// 128 bytes. The charset admits no `$`, so a branch can never take a reserved target's
+// name (BranchArchive, BranchUniverse, TargetBranches) and be shadowed by it at read time.
 func ValidateBranchName(name string) error {
 	switch {
 	case name == "":

@@ -6,6 +6,37 @@ What each release changed for someone depending on this repository.
 
 ### Added
 
+- A claim may be signed under **ECDSA over P-256**, the second scheme `V-SIGN` now
+  names: `ES256` in the envelope's protected header, the pubkey framed as the
+  multicodec `0x1200` (`p256-pub`) over the compressed point. Ed25519 is unchanged,
+  and every existing claim keeps its id. `ParseKeypair` and the new
+  `ParsePrivateKeyPEM` read a PKCS#8 PEM under either scheme, `EncodePublicKey` and
+  `DecodePublicKey` frame and parse both, and the builder took a `crypto.Signer`
+  already — so a key held where no Ed25519 type is published (Azure Key Vault, a
+  Managed HSM) can now sign a claim this library accepts.
+- `ErrEnvelopeScheme` — a claim names its scheme twice, in the protected header and
+  in its pubkey's framing, and the two MUST agree (`V-SIGN`). A signature made under
+  one scheme presented as the other's is refused, as is an envelope naming a scheme
+  outside the two, which is refused as the envelope is read.
+- `ParsePublicKeyPEM` / `LoadPublicKeyPEM` read a SubjectPublicKeyInfo PEM under
+  either scheme, as `ParsePrivateKeyPEM` does for a PKCS#8 private key. The Ed25519
+  pair stays for a caller wanting that type back.
+- The published vector set gains an ES256 identity — `p256-contributor`, `p256-note`,
+  and `rejected-scheme-disagreement`, a record naming EdDSA in its header while its
+  contributor publishes a `p256-pub` key. `V-SIGN` therefore leaves
+  `scripts/rule-vectors.allow` with a case rather than an excuse, taking the covered
+  rules from 16 to 17. The set is published, generated at `v0.34.0-rc.1`, which
+  `expectedGenerator` in `tests/vectors_test.go` now names: a downstream
+  implementation receives the three cases, and a conformance run here is judged
+  against them.
+- `adapter/storage/azure` — an Azure Blob Storage backend, the object-store
+  counterpart of `adapter/storage/s3`: `azure.New(client, container)` keys claims,
+  content and bookmarks by their id strings as block blobs in one container, streams
+  content off the download response, and stores each blob under a conditional write
+  so a re-put of content-addressed bytes costs no upload. `WithConcurrency` sets the
+  bulk fan-out, `ReadOnly` suppresses the capability probe's sentinel write for an
+  immutable container. It adds the matrix's `azure` row, which runs against Azurite —
+  `services/azurite.sh native up`, and `RANKE_AZURE_ENDPOINT` points a run at it.
 - `Universe.Bookmarks() BookmarkStore` — a backend's 𝒰_hist, the second address
   scheme keyed on `id_seq(i, s)`. Every `Universe` implementation must answer it.
   The Universe owning the store is what lets a bookmark list inherit the layering,

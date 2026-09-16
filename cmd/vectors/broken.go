@@ -54,7 +54,35 @@ func (g *gen) broken(ctx context.Context) error {
 	if err := g.firstTableHeight(); err != nil {
 		return err
 	}
+	if err := g.schemeDisagreement(); err != nil {
+		return err
+	}
 	return g.tamperedBlob()
+}
+
+// schemeDisagreement offers p256-note's record with its header rewritten to name EdDSA,
+// under an id that holds for those bytes. Its contributor publishes a p256-pub key, so
+// the record names one scheme in its header and another in its key framing, which
+// `V-SIGN` requires to agree — and no signature can answer for both.
+func (g *gen) schemeDisagreement() error {
+	var msg cose.Sign1Message
+	if err := msg.UnmarshalCBOR(g.raw["p256-note"]); err != nil {
+		return err
+	}
+	msg.Headers.Protected[cose.HeaderLabelAlgorithm] = cose.AlgorithmEd25519
+	msg.Headers.RawProtected = nil // the bytes as read win over the map unless cleared
+	raw, err := msg.MarshalCBOR()
+	if err != nil {
+		return err
+	}
+	id, err := ranke.HashContent(raw)
+	if err != nil {
+		return err
+	}
+	return g.addBroken("rejected-scheme-disagreement", raw, id.String(),
+		vectors.ReasonSignatureScheme,
+		"p256-note's record under an EdDSA header, its contributor's key framed p256-pub",
+		"V-SIGN")
 }
 
 // firstTableHeight declares height 2 on an initial branch table, which stands on its

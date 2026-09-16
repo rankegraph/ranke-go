@@ -1,60 +1,66 @@
 #!/usr/bin/env bash
-# services/s3.sh — an easy, ephemeral S3 object store (MinIO) for the s3 matrix
-# row / perf suite, in one of two modes:
+# services/azurite.sh — an easy, ephemeral Azure Blob service (Azurite, Microsoft's
+# storage emulator) for the azure matrix row / perf suite, in one of two modes:
 #
-#   pod      run MinIO in a podman pod (needs podman); mirrors the redis/neo4j pods.
-#   native   run the MinIO binary directly in this container (no podman, no root);
+#   pod      run Azurite in a podman pod (needs podman); mirrors the redis/neo4j pods.
+#   native   run Azurite from npm directly in this container (no podman, no root);
 #            reached at 127.0.0.1 — use this where there is no podman.
 #
-# Both start MinIO with the credentials the tests expect, wait until it serves,
-# and print the RANKE_S3_* env to point the tests at it. The tests create their
-# own bucket per run, so this only has to serve.
+# Both serve the emulator's well-known account (devstoreaccount1) the tests expect,
+# wait until it answers, and print the RANKE_AZURE_* env to point the tests at it.
+# The tests create their own blob container per run, so this only has to serve.
 #
 # Usage:
-#   services/s3.sh pod    {up|down|status|env}
-#   services/s3.sh native {up|down|status|env|purge}
+#   services/azurite.sh pod    {up|down|status|env}
+#   services/azurite.sh native {up|down|status|env|purge}
 #
-# Shared overrides: RANKE_S3_{KEY,SECRET,PORT,READY_TIMEOUT}.
-# Pod:    RANKE_S3_{NAME,IMAGE}.   Native: RANKE_S3_{DIR,CONSOLE_PORT}.
+# Shared overrides: RANKE_AZURE_{ACCOUNT,KEY,PORT,READY_TIMEOUT}.
+# Pod:    RANKE_AZURE_{NAME,IMAGE}.   Native: RANKE_AZURE_{DIR,VERSION}.
 set -euo pipefail
 
 # ── shared config ──────────────────────────────────────────────────────
-KEY="${RANKE_S3_KEY:-minioadmin}"       # matches the test default
-SECRET="${RANKE_S3_SECRET:-minioadmin}" # matches the test default
-PORT="${RANKE_S3_PORT:-9000}"
-READY_TIMEOUT="${RANKE_S3_READY_TIMEOUT:-60}"
-ENDPOINT="http://127.0.0.1:${PORT}"
+# The emulator's account and key, published by Microsoft and served by every
+# Azurite instance; the tests default to the same pair.
+ACCOUNT="${RANKE_AZURE_ACCOUNT:-devstoreaccount1}"
+KEY="${RANKE_AZURE_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}"
+PORT="${RANKE_AZURE_PORT:-10000}"
+READY_TIMEOUT="${RANKE_AZURE_READY_TIMEOUT:-60}"
+ENDPOINT="http://127.0.0.1:${PORT}/${ACCOUNT}"
 
 test_env_hint() {
   cat <<EOF
 
   Point the tests at it:
-    RANKE_S3_ENDPOINT=${ENDPOINT} RANKE_S3_KEY=${KEY} RANKE_S3_SECRET=${SECRET} \\
+    RANKE_AZURE_ENDPOINT=${ENDPOINT} \\
       go test ./tests/matrix/ -run TestMatrix -v
 EOF
 }
 
-# wait_ready polls MinIO's readiness endpoint until it answers.
+# is_serving asks for a listing without a signature: 403 is Azurite answering, and
+# anything it answers means the service is up. A dead port gives curl nothing.
+is_serving() {
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' "${ENDPOINT}?comp=list" 2>/dev/null || true)"
+  [ -n "$code" ] && [ "$code" != "000" ]
+}
+
 wait_ready() {
   local deadline=$(( SECONDS + READY_TIMEOUT ))
-  echo "waiting for MinIO to serve (up to ${READY_TIMEOUT}s)..."
+  echo "waiting for Azurite to serve (up to ${READY_TIMEOUT}s)..."
   while [ "$SECONDS" -lt "$deadline" ]; do
-    if curl -sf -o /dev/null "${ENDPOINT}/minio/health/ready"; then
-      echo "MinIO is serving."
+    if is_serving; then
+      echo "Azurite is serving."
       return 0
     fi
     sleep 1
   done
-  echo "error: MinIO did not become ready within ${READY_TIMEOUT}s" >&2
+  echo "error: Azurite did not become ready within ${READY_TIMEOUT}s" >&2
   return 1
 }
 
-is_serving() { curl -sf -o /dev/null "${ENDPOINT}/minio/health/ready"; }
-
 # ── pod mode ───────────────────────────────────────────────────────────
-POD_NAME="${RANKE_S3_NAME:-ranke-minio}"
-# quay.io is where MinIO is published; docker.io/minio/minio answers 404.
-POD_IMAGE="${RANKE_S3_IMAGE:-quay.io/minio/minio:latest}"
+POD_NAME="${RANKE_AZURE_NAME:-ranke-azurite}"
+POD_IMAGE="${RANKE_AZURE_IMAGE:-mcr.microsoft.com/azure-storage/azurite:latest}"
 
 pod_need_podman() { command -v podman >/dev/null 2>&1 || { echo "error: podman not on PATH" >&2; exit 1; }; }
 pod_is_running()  { [ "$(podman inspect -f '{{.State.Running}}' "$POD_NAME" 2>/dev/null)" = "true" ]; }
@@ -62,7 +68,7 @@ pod_is_running()  { [ "$(podman inspect -f '{{.State.Running}}' "$POD_NAME" 2>/d
 pod_print_env() {
   cat <<EOF
 
-  MinIO pod '${POD_NAME}' is up.  key: ${KEY}   secret: ${SECRET}
+  Azurite pod '${POD_NAME}' is up.  account: ${ACCOUNT}
   Reach it from the host:  ${ENDPOINT}
 EOF
   test_env_hint
@@ -71,13 +77,12 @@ EOF
 pod_up() {
   pod_need_podman
   if pod_is_running; then
-    echo "MinIO '${POD_NAME}' already running; reusing it."
+    echo "Azurite '${POD_NAME}' already running; reusing it."
   else
     podman rm -f "$POD_NAME" >/dev/null 2>&1 || true
-    echo "starting MinIO '${POD_NAME}'..."
-    podman run -d --rm --name "$POD_NAME" -p "127.0.0.1:${PORT}:9000" \
-      -e "MINIO_ROOT_USER=${KEY}" -e "MINIO_ROOT_PASSWORD=${SECRET}" \
-      "$POD_IMAGE" server /data >/dev/null
+    echo "starting Azurite '${POD_NAME}'..."
+    podman run -d --rm --name "$POD_NAME" -p "127.0.0.1:${PORT}:10000" \
+      "$POD_IMAGE" azurite-blob --blobHost 0.0.0.0 --blobPort 10000 >/dev/null
     wait_ready
   fi
   pod_print_env
@@ -88,43 +93,40 @@ pod_status() { pod_need_podman; pod_is_running && echo "'${POD_NAME}' running on
 pod_env()    { pod_need_podman; pod_is_running && pod_print_env || { echo "'${POD_NAME}' not running" >&2; exit 1; }; }
 
 # ── native mode ────────────────────────────────────────────────────────
-NAT_DIR="${RANKE_S3_DIR:-$HOME/.ranke-minio}"
-CONSOLE_PORT="${RANKE_S3_CONSOLE_PORT:-9001}"
+NAT_DIR="${RANKE_AZURE_DIR:-$HOME/.ranke-azurite}"
+NAT_VERSION="${RANKE_AZURE_VERSION:-3.37.0}"
 DATA_DIR="$NAT_DIR/data"
-PIDFILE="$NAT_DIR/minio.pid"
-LOGFILE="$NAT_DIR/minio.log"
-BIN="$NAT_DIR/minio"
-NAT_URL="https://dl.min.io/server/minio/release/linux-amd64/minio"
+PIDFILE="$NAT_DIR/azurite.pid"
+LOGFILE="$NAT_DIR/azurite.log"
+BIN="$NAT_DIR/node_modules/.bin/azurite-blob"
 
-nat_ensure_minio() {
+nat_ensure_azurite() {
   [ -x "$BIN" ] && return 0
-  echo "downloading the MinIO server binary (~110MB)..."
+  command -v npm >/dev/null 2>&1 || { echo "error: npm not on PATH (Azurite ships as an npm package)" >&2; exit 1; }
+  echo "installing azurite@${NAT_VERSION} from npm..."
   mkdir -p "$NAT_DIR"
-  curl -fSL "$NAT_URL" -o "$BIN"
-  chmod +x "$BIN"
-  echo "installed $("$BIN" --version | head -1) into ${NAT_DIR}"
+  ( cd "$NAT_DIR" && npm install --no-fund --no-audit "azurite@${NAT_VERSION}" >/dev/null )
+  echo "installed into ${NAT_DIR}"
 }
 
 nat_print_env() {
   cat <<EOF
 
-  MinIO (native, in-container) is up.  key: ${KEY}   secret: ${SECRET}
-  Reach it (same container → localhost):  ${ENDPOINT}   console: http://127.0.0.1:${CONSOLE_PORT}
+  Azurite (native, in-container) is up.  account: ${ACCOUNT}
+  Reach it (same container → localhost):  ${ENDPOINT}
   Install dir: ${NAT_DIR}
 EOF
   test_env_hint
 }
 
 nat_up() {
-  nat_ensure_minio
+  nat_ensure_azurite
   mkdir -p "$DATA_DIR"
   if is_serving; then
-    echo "MinIO already serving on ${ENDPOINT}; reusing it."
+    echo "Azurite already serving on ${ENDPOINT}; reusing it."
   else
-    echo "starting MinIO..."
-    MINIO_ROOT_USER="$KEY" MINIO_ROOT_PASSWORD="$SECRET" \
-      nohup "$BIN" server "$DATA_DIR" \
-      --address "127.0.0.1:${PORT}" --console-address "127.0.0.1:${CONSOLE_PORT}" \
+    echo "starting Azurite..."
+    nohup "$BIN" --blobHost 127.0.0.1 --blobPort "$PORT" --location "$DATA_DIR" \
       >"$LOGFILE" 2>&1 &
     echo $! >"$PIDFILE"
     wait_ready
@@ -150,9 +152,9 @@ usage() {
   cat <<EOF
 usage: $0 <pod|native> <command>
 
-  pod     run MinIO in a podman pod (needs podman)
+  pod     run Azurite in a podman pod (needs podman)
             up | down | status | env
-  native  run the MinIO binary in this container (no podman/root)
+  native  run Azurite from npm in this container (no podman/root)
             up | down | status | env | purge
 EOF
 }

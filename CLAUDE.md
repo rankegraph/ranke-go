@@ -53,7 +53,7 @@ spending the minutes on it.
 
 ## services
 
-Infrastructure for the rows that need it. All three scripts have a **`native`**
+Infrastructure for the rows that need it. All four scripts have a **`native`**
 mode that runs the service in-container — no podman, no root — which is the mode
 that works here:
 
@@ -66,10 +66,15 @@ that works here:
   `neo4j/redis/s3` stack. Also needs its env: `RANKE_S3_ENDPOINT=http://127.0.0.1:9000
   RANKE_S3_KEY=minioadmin RANKE_S3_SECRET=minioadmin`. Each open creates its own
   bucket, so concurrent runs against one store stay off each other's objects.
+- `services/azurite.sh native up` — adds the `azure` row, serving Azure Blob
+  Storage through Azurite (npm, so node is the only requirement). Also needs its
+  env: `RANKE_AZURE_ENDPOINT=http://127.0.0.1:10000/devstoreaccount1`; the
+  emulator's account and key are the defaults. Each open creates its own blob
+  container, so concurrent runs against one service stay off each other's blobs.
 - `services/neo4j.sh query '<cypher>'` — ad-hoc Cypher against the running
   instance. The way to isolate a lowering bug: run the generated statement
   directly and bisect it, rather than inferring from a Go-level error.
-- The pod mode of each script, and the pods `minioPod()`/`redisPod()`/`neo4jPod()`
+- The pod mode of each script, and the pods `minioPod()`/`azuritePod()`/`redisPod()`/`neo4jPod()`
   spawn, need podman — absent here. The env vars above are the way in without it,
   and CI uses the same ones against its service containers.
 
@@ -100,6 +105,26 @@ that works here:
 - For "what depends on this package", `go list -f '{{.ImportPath}} {{.Imports}}
   {{.TestImports}}' ./...` is authoritative. A text search is not: it misses
   build constraints and cannot tell a test import from a real one.
+
+# Verification never signs
+
+A verifier hashes the record as it was received and checks the signature over those
+bytes. It re-encodes nothing and re-signs nothing. Two things follow, and both get
+argued wrong:
+
+- **Any valid signature is a publishable vector.** How a signature's nonce was chosen
+  is the signer's business and reaches nobody downstream, so "ECDSA is randomised" is
+  never a reason to leave a scheme out of the conformance set. Where the *generator*
+  needs byte-identical output on a re-run (it does — `TestVectorsAreReproducible`),
+  it signs with a deterministic nonce of its own: `cmd/vectors`'s `p256Signer` holds a
+  key derived from a fixed scalar and signs RFC 6979. The library does NOT promise
+  that, and no rule asks it to — the foundation paper dropped "deterministic" from
+  `Sign` when `V-SIGN` gained ECDSA.
+- **An encoder change moves every id; a new signing scheme moves none.** Claims
+  already written keep verifying byte for byte, which is why adding ES256 left the
+  scenario references and the published set untouched. What a new scheme owes is a
+  case IN the set, so an implementation cannot pass while rejecting every record made
+  under it.
 
 # Versioning
 

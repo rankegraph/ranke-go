@@ -229,41 +229,6 @@ func TestEdgeCarriesTargetDeleteBy(t *testing.T) {
 	require.Empty(t, run.Failures(), "what the builder produces is what the rule accepts")
 }
 
-// --- honest graphs verify ----------------------------------------------
-
-// TestVerifyGraphSignedByItsContributor: a claim signs under the key its contributor
-// carries, with no key passed at the call — the other half of TestVerifySignedGraph,
-// which hands one over explicitly.
-func TestVerifyGraphSignedByItsContributor(t *testing.T) {
-	root := contributor(t)
-	g := newGraph(t, root)
-	require.NoError(t, g.AddClaims(context.Background(), srcClaim(t, root, "hello")))
-
-	run := g.Verify()
-	run.Wait()
-	require.NoError(t, run.Err(), "no terminal error")
-	require.Empty(t, run.Failures(), "the closure verifies")
-}
-
-// TestVerifySignedGraph: an honestly-built signed graph verifies — the
-// per-claim signature check passes across the closure.
-func TestVerifySignedGraph(t *testing.T) {
-	alice, alicePriv := newSignedContributor(t)
-	g := newGraph(t, alice)
-	src, err := NewClaim(TypeSource("email"), alice).
-		WithInlineContent([]byte("From: alice\r\n\r\nhi")).
-		WithEncoding(EncodingMessage("rfc822")).
-		WithHeight(HeightOf(alice)).
-		Sign(alicePriv)
-	require.NoError(t, err)
-	require.NoError(t, g.AddClaims(context.Background(), src))
-
-	run := g.Verify()
-	run.Wait()
-	require.NoError(t, run.Err())
-	require.Empty(t, run.Failures(), "signed closure verifies")
-}
-
 // TestVerifyCountsEveryClaim: the run reports every claim in the closure as
 // verified — here the root contributor plus the source.
 func TestVerifyCountsEveryClaim(t *testing.T) {

@@ -1,7 +1,7 @@
 // package: tests/backends / integration
 // type:    tool
 // job:     the shared backend matrix — one named opener per storage configuration, each spinning up
-// a FRESH, EMPTY local instance (podman pods for s3/redis/neo4j, or host-native services)
+// a FRESH, EMPTY local instance (podman pods for s3/azure/redis/neo4j, or host-native services)
 // limits:  wiring only — no test logic and no assertions; the rows are consumed by the conformance
 // matrix (-> tests/matrix) and the timing harness (-> tests/performance)
 package backends
@@ -20,6 +20,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 
 	"github.com/rankegraph/ranke-go"
+	"github.com/rankegraph/ranke-go/adapter/storage/azure"
 	"github.com/rankegraph/ranke-go/adapter/storage/fs"
 	"github.com/rankegraph/ranke-go/adapter/storage/mem"
 	neo4jstore "github.com/rankegraph/ranke-go/adapter/storage/neo4j"
@@ -34,14 +35,14 @@ import (
 // with no podman); a caller reports the row as skipped.
 var ErrUnavailable = errors.New("backend unavailable")
 
-// forceNativeServices routes the pod-based services (neo4j, redis, s3) to localhost.
+// forceNativeServices routes the pod-based services (neo4j, redis, s3, azure) to localhost.
 var forceNativeServices bool
 
 // redisSeq numbers the key prefixes one process hands out, so two live universes over
 // one redis never share a keyspace.
 var redisSeq atomic.Int64
 
-// UseNativeServices routes neo4j, redis and s3 to host-native instances on localhost
+// UseNativeServices routes neo4j, redis, s3 and azure to host-native instances on localhost
 // rather than podman pods — the harness's --native mode. Call before opening a backend.
 func UseNativeServices(on bool) { forceNativeServices = on }
 
@@ -70,6 +71,7 @@ func All() []Backend {
 		{Name: "fs", Open: openFS},
 		{Name: "sqlite", Open: openSqlite},
 		{Name: "s3", Open: openS3},
+		{Name: "azure", Open: openAzure},
 		{Name: "redis", Open: openRedis},
 		{Name: "neo4j/mem", Open: Stacked(openNeo4j, openMem), Exclusive: exclusive.Neo4j},
 		{Name: "neo4j/redis/s3", Open: Stacked(openNeo4j, openRedis, openS3), Exclusive: exclusive.Neo4j},
@@ -162,6 +164,19 @@ func openS3() (ranke.Universe, func(), error) {
 		return nil, nil, err
 	}
 	u, err := s3.New(client, bucket, s3.WithConcurrency(8))
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	return u, cleanup, nil
+}
+
+func openAzure() (ranke.Universe, func(), error) {
+	client, name, cleanup, err := azureConn()
+	if err != nil {
+		return nil, nil, err
+	}
+	u, err := azure.New(client, name, azure.WithConcurrency(8))
 	if err != nil {
 		cleanup()
 		return nil, nil, err

@@ -16,8 +16,9 @@ jobs:
 
     # Every service the backend matrix knows, addressed here, so every row runs.
     # CLAUDE.md's rule — missing infrastructure is a test failure, not a skip — is
-    # only true of a run that can reach all three; a break in any of these values
-    # turns the affected rows red.
+    # only true of a run that can reach all four; a break in any of these values
+    # turns the affected rows red. Azure's account and key are the emulator's
+    # well-known pair, which the tests default to.
     env:
       RANKE_NEO4J_BOLT: bolt://127.0.0.1:7687
       RANKE_NEO4J_HTTP: http://127.0.0.1:7474
@@ -28,6 +29,7 @@ jobs:
       RANKE_S3_ENDPOINT: http://127.0.0.1:9000
       RANKE_S3_KEY: minioadmin
       RANKE_S3_SECRET: minioadmin
+      RANKE_AZURE_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
 
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +42,8 @@ jobs:
       # `docker run`, not a services: block: redis needs --requirepass and minio
       # needs `server /data`, and a service container cannot carry a command.
       # Started before the build so the slow one (neo4j) boots while Go compiles.
+      # MinIO comes from quay.io, which is where it is published: docker.io/minio/minio
+      # answers 404, and an anonymous pull of it is refused as access denied.
       - name: Start backends
         run: |
           docker run -d --name ranke-neo4j -p 7474:7474 -p 7687:7687 \
@@ -48,7 +52,18 @@ jobs:
             docker.io/library/redis:7-alpine redis-server --requirepass rankeperfpass
           docker run -d --name ranke-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            docker.io/minio/minio:latest server /data
+            quay.io/minio/minio:latest server /data
+
+      # Azurite from npm rather than its image: it ships as an npm package and the
+      # runner has node, so the blob service starts without a registry pull, on the
+      # port and version `services/azurite.sh native` uses — CI and a local run stay
+      # one story rather than two.
+      - name: Start Azurite
+        run: |
+          npm install -g azurite@3.37.0
+          mkdir -p "$RUNNER_TEMP/azurite"
+          nohup azurite-blob --blobHost 127.0.0.1 --blobPort 10000 \
+            --location "$RUNNER_TEMP/azurite" > "$RUNNER_TEMP/azurite.log" 2>&1 &
 
       # The spec the rule-citation gate reads (`RANKE_SPEC`, else docs/papers/) lives
       # in ranke-graph, so it is infrastructure like the services: fetched, not
@@ -103,17 +118,26 @@ jobs:
       # container state: a slow boot must not read as a broken backend.
       - name: Wait for backends
         run: |
+          # Azurite answers an unsigned listing with 403, so any status line at all
+          # says it serves; -f would read that refusal as a dead service.
+          azurite() {
+            code="$(curl -s -o /dev/null -w '%{http_code}' \
+              "${RANKE_AZURE_ENDPOINT}?comp=list" || true)"
+            [ -n "$code" ] && [ "$code" != "000" ]
+          }
           serving() {
             curl -sf -o /dev/null http://127.0.0.1:7474/ &&
             curl -sf -o /dev/null http://127.0.0.1:9000/minio/health/ready &&
-            (exec 3<>/dev/tcp/127.0.0.1/6379)
+            (exec 3<>/dev/tcp/127.0.0.1/6379) &&
+            azurite
           }
           for _ in $(seq 60); do
-            if serving; then echo "neo4j, minio and redis are serving"; exit 0; fi
+            if serving; then echo "neo4j, minio, redis and azurite are serving"; exit 0; fi
             sleep 5
           done
           echo "backends did not come up within 300s" >&2
           docker ps -a
+          cat "$RUNNER_TEMP/azurite.log" || true
           exit 1
 
       # The full gate, the same target a developer runs locally, so the two cannot

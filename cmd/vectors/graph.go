@@ -16,8 +16,12 @@ import (
 // externalBlob is the content the external-content claim addresses.
 var externalBlob = []byte("externalized content, addressed by hash")
 
-// rootSeed derives the identity that signs most of the set, patched records included.
-const rootSeed = "ranke-vectors/root"
+// rootSeed derives the identity that signs most of the set, patched records included;
+// p256Seed the one that signs under the other scheme.
+const (
+	rootSeed = "ranke-vectors/root"
+	p256Seed = "ranke-vectors/p256"
+)
 
 // conformanceGraph builds the claims that must verify: a contributor, a source note, a
 // derived claim citing it, external content, node fields, a dated claim, the
@@ -66,7 +70,39 @@ func (g *gen) conformanceGraph(ctx context.Context) error {
 	if err := g.tableRevision(table, who); err != nil {
 		return err
 	}
-	return g.secondContributor(ctx)
+	if err := g.secondContributor(ctx); err != nil {
+		return err
+	}
+	return g.p256Contributor(ctx)
+}
+
+// p256Contributor adds an identity under the second scheme `V-SIGN` names, and a claim
+// of its own. A set signed under Ed25519 alone would let an implementation pass while
+// rejecting every ES256 record there is.
+func (g *gen) p256Contributor(ctx context.Context) error {
+	key, err := p256Signer(p256Seed)
+	if err != nil {
+		return err
+	}
+	who, view, err := contributorClaim(ctx, key, epoch.Add(7*time.Second))
+	if err != nil {
+		return err
+	}
+	if err := g.addClaim("p256-contributor", who,
+		"initial claim whose content is its own p256-pub multikey, its envelope naming ES256 (`V-SIGN`)"); err != nil {
+		return err
+	}
+	c, err := ranke.NewClaim(ranke.TypeSource("note"), view).
+		WithInlineContent([]byte("a note signed under ES256")).
+		WithEncoding(ranke.EncodingPlain).
+		WithHeight(1).
+		WithCreatedAt(epoch.Add(8 * time.Second)).
+		Sign()
+	if err != nil {
+		return err
+	}
+	return g.addClaim("p256-note", c,
+		"attributed to p256-contributor, so its signature verifies under a P-256 key")
 }
 
 // derived adds a claim citing the note through a derivation edge, which exercises
