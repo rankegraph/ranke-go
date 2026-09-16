@@ -6,6 +6,14 @@ What each release changed for someone depending on this repository.
 
 ### Added
 
+- `adapter/storage/azure` — an Azure Blob Storage backend, the object-store
+  counterpart of `adapter/storage/s3`: `azure.New(client, container)` keys claims,
+  content and bookmarks by their id strings as block blobs in one container, streams
+  content off the download response, and stores each blob under a conditional write
+  so a re-put of content-addressed bytes costs no upload. `WithConcurrency` sets the
+  bulk fan-out, `ReadOnly` suppresses the capability probe's sentinel write for an
+  immutable container. It adds the matrix's `azure` row, which runs against Azurite —
+  `services/azurite.sh native up`, and `RANKE_AZURE_ENDPOINT` points a run at it.
 - `Universe.Bookmarks() BookmarkStore` — a backend's 𝒰_hist, the second address
   scheme keyed on `id_seq(i, s)`. Every `Universe` implementation must answer it.
   The Universe owning the store is what lets a bookmark list inherit the layering,

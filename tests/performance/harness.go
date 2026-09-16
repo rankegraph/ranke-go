@@ -31,7 +31,7 @@ type Config struct {
 	Backends  []string // backend names to run; empty = all
 	Progress  bool     // show an in-place per-chapter progress line (interactive CLI; off under go test)
 	QueryReps int      // times each RQL query is timed in chapter 4; 0 = 10
-	Native    bool     // connect neo4j/redis/s3 to a host-native instance (localhost) instead of spawning podman pods
+	Native    bool     // connect neo4j/redis/s3/azure to a host-native instance (localhost) instead of spawning podman pods
 	Step      string   // run only this step (e.g. "2-verify", "3.1", "4.5"); "" = all. setup+tag always run.
 	Report    bool     // print each query's full execution report in the queries section
 }

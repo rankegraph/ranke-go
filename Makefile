@@ -144,6 +144,7 @@ test/integration: ## Archive/Sequencer blackbox suite across adapters
 #   services/neo4j.sh native up    # the neo4j/mem row
 #   services/redis.sh native up    # the redis row
 #   services/s3.sh native up       # the s3 row, and the neo4j/redis/s3 stack
+#   services/azurite.sh native up  # the azure row
 # Verbose so the per-row, per-query sub-tests are visible.
 test/matrix: ## Cross-backend RQL conformance matrix (RANKE_ROWS to narrow; needs services up)
 	$(GOTEST) ./tests/matrix/ -v -count=1

@@ -16,8 +16,9 @@ jobs:
 
     # Every service the backend matrix knows, addressed here, so every row runs.
     # CLAUDE.md's rule — missing infrastructure is a test failure, not a skip — is
-    # only true of a run that can reach all three; a break in any of these values
-    # turns the affected rows red.
+    # only true of a run that can reach all four; a break in any of these values
+    # turns the affected rows red. Azure's account and key are the emulator's
+    # well-known pair, which the tests default to.
     env:
       RANKE_NEO4J_BOLT: bolt://127.0.0.1:7687
       RANKE_NEO4J_HTTP: http://127.0.0.1:7474
@@ -28,6 +29,7 @@ jobs:
       RANKE_S3_ENDPOINT: http://127.0.0.1:9000
       RANKE_S3_KEY: minioadmin
       RANKE_S3_SECRET: minioadmin
+      RANKE_AZURE_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
 
     steps:
       - uses: actions/checkout@v4
@@ -37,8 +39,9 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # `docker run`, not a services: block: redis needs --requirepass and minio
-      # needs `server /data`, and a service container cannot carry a command.
+      # `docker run`, not a services: block: redis needs --requirepass, minio needs
+      # `server /data` and azurite needs `azurite-blob`, and a service container
+      # cannot carry a command.
       # Started before the build so the slow one (neo4j) boots while Go compiles.
       - name: Start backends
         run: |
@@ -49,6 +52,9 @@ jobs:
           docker run -d --name ranke-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
             docker.io/minio/minio:latest server /data
+          docker run -d --name ranke-azurite -p 10000:10000 \
+            mcr.microsoft.com/azure-storage/azurite:latest \
+            azurite-blob --blobHost 0.0.0.0 --blobPort 10000
 
       # The spec the rule-citation gate reads (`RANKE_SPEC`, else docs/papers/) lives
       # in ranke-graph, so it is infrastructure like the services: fetched, not
@@ -103,13 +109,21 @@ jobs:
       # container state: a slow boot must not read as a broken backend.
       - name: Wait for backends
         run: |
+          # Azurite answers an unsigned listing with 403, so any status line at all
+          # says it serves; -f would read that refusal as a dead service.
+          azurite() {
+            code="$(curl -s -o /dev/null -w '%{http_code}' \
+              'http://127.0.0.1:10000/devstoreaccount1?comp=list' || true)"
+            [ -n "$code" ] && [ "$code" != "000" ]
+          }
           serving() {
             curl -sf -o /dev/null http://127.0.0.1:7474/ &&
             curl -sf -o /dev/null http://127.0.0.1:9000/minio/health/ready &&
-            (exec 3<>/dev/tcp/127.0.0.1/6379)
+            (exec 3<>/dev/tcp/127.0.0.1/6379) &&
+            azurite
           }
           for _ in $(seq 60); do
-            if serving; then echo "neo4j, minio and redis are serving"; exit 0; fi
+            if serving; then echo "neo4j, minio, redis and azurite are serving"; exit 0; fi
             sleep 5
           done
           echo "backends did not come up within 300s" >&2

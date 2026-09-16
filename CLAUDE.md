@@ -53,7 +53,7 @@ spending the minutes on it.
 
 ## services
 
-Infrastructure for the rows that need it. All three scripts have a **`native`**
+Infrastructure for the rows that need it. All four scripts have a **`native`**
 mode that runs the service in-container — no podman, no root — which is the mode
 that works here:
 
@@ -66,10 +66,15 @@ that works here:
   `neo4j/redis/s3` stack. Also needs its env: `RANKE_S3_ENDPOINT=http://127.0.0.1:9000
   RANKE_S3_KEY=minioadmin RANKE_S3_SECRET=minioadmin`. Each open creates its own
   bucket, so concurrent runs against one store stay off each other's objects.
+- `services/azurite.sh native up` — adds the `azure` row, serving Azure Blob
+  Storage through Azurite (npm, so node is the only requirement). Also needs its
+  env: `RANKE_AZURE_ENDPOINT=http://127.0.0.1:10000/devstoreaccount1`; the
+  emulator's account and key are the defaults. Each open creates its own blob
+  container, so concurrent runs against one service stay off each other's blobs.
 - `services/neo4j.sh query '<cypher>'` — ad-hoc Cypher against the running
   instance. The way to isolate a lowering bug: run the generated statement
   directly and bisect it, rather than inferring from a Go-level error.
-- The pod mode of each script, and the pods `minioPod()`/`redisPod()`/`neo4jPod()`
+- The pod mode of each script, and the pods `minioPod()`/`azuritePod()`/`redisPod()`/`neo4jPod()`
   spawn, need podman — absent here. The env vars above are the way in without it,
   and CI uses the same ones against its service containers.
 
