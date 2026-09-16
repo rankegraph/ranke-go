@@ -53,7 +53,8 @@ is_serving() { curl -sf -o /dev/null "${ENDPOINT}/minio/health/ready"; }
 
 # ── pod mode ───────────────────────────────────────────────────────────
 POD_NAME="${RANKE_S3_NAME:-ranke-minio}"
-POD_IMAGE="${RANKE_S3_IMAGE:-docker.io/minio/minio:latest}"
+# quay.io is where MinIO is published; docker.io/minio/minio answers 404.
+POD_IMAGE="${RANKE_S3_IMAGE:-quay.io/minio/minio:latest}"
 
 pod_need_podman() { command -v podman >/dev/null 2>&1 || { echo "error: podman not on PATH" >&2; exit 1; }; }
 pod_is_running()  { [ "$(podman inspect -f '{{.State.Running}}' "$POD_NAME" 2>/dev/null)" = "true" ]; }

@@ -25,7 +25,9 @@ import (
 )
 
 const (
-	minioImage = "docker.io/minio/minio:latest"
+	// quay.io is where MinIO is published: docker.io/minio/minio answers 404, and an
+	// anonymous pull of it is refused as access denied.
+	minioImage = "quay.io/minio/minio:latest"
 	minioUser  = "minioadmin"
 	minioPass  = "minioadmin"
 	minioReady = 30 * time.Second

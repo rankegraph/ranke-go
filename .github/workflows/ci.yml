@@ -29,7 +29,7 @@ jobs:
       RANKE_S3_ENDPOINT: http://127.0.0.1:9000
       RANKE_S3_KEY: minioadmin
       RANKE_S3_SECRET: minioadmin
-      RANKE_AZURE_ENDPOINT: http://127.0.0.1:10010/devstoreaccount1
+      RANKE_AZURE_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
 
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +42,8 @@ jobs:
       # `docker run`, not a services: block: redis needs --requirepass and minio
       # needs `server /data`, and a service container cannot carry a command.
       # Started before the build so the slow one (neo4j) boots while Go compiles.
+      # MinIO comes from quay.io, which is where it is published: docker.io/minio/minio
+      # answers 404, and an anonymous pull of it is refused as access denied.
       - name: Start backends
         run: |
           docker run -d --name ranke-neo4j -p 7474:7474 -p 7687:7687 \
@@ -50,18 +52,17 @@ jobs:
             docker.io/library/redis:7-alpine redis-server --requirepass rankeperfpass
           docker run -d --name ranke-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            docker.io/minio/minio:latest server /data
+            quay.io/minio/minio:latest server /data
 
-      # Azurite from npm rather than its image: the runner has node, so the blob
-      # service starts without a registry pull or a published port, and it is the path
-      # `services/azurite.sh native` takes, so CI and a local run stay one story. It
-      # serves 10010 because the runner's 10000 is not ours to assume free — a docker
-      # run publishing it exited 125 here.
+      # Azurite from npm rather than its image: it ships as an npm package and the
+      # runner has node, so the blob service starts without a registry pull, on the
+      # port and version `services/azurite.sh native` uses — CI and a local run stay
+      # one story rather than two.
       - name: Start Azurite
         run: |
           npm install -g azurite@3.37.0
           mkdir -p "$RUNNER_TEMP/azurite"
-          nohup azurite-blob --blobHost 127.0.0.1 --blobPort 10010 \
+          nohup azurite-blob --blobHost 127.0.0.1 --blobPort 10000 \
             --location "$RUNNER_TEMP/azurite" > "$RUNNER_TEMP/azurite.log" 2>&1 &
 
       # The spec the rule-citation gate reads (`RANKE_SPEC`, else docs/papers/) lives
