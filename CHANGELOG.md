@@ -25,8 +25,10 @@ What each release changed for someone depending on this repository.
   and `rejected-scheme-disagreement`, a record naming EdDSA in its header while its
   contributor publishes a `p256-pub` key. `V-SIGN` therefore leaves
   `scripts/rule-vectors.allow` with a case rather than an excuse, taking the covered
-  rules from 16 to 17. The set must be regenerated and republished for a downstream
-  implementation to receive them.
+  rules from 16 to 17. The set is published, generated at `v0.34.0-rc.1`, which
+  `expectedGenerator` in `tests/vectors_test.go` now names: a downstream
+  implementation receives the three cases, and a conformance run here is judged
+  against them.
 - `adapter/storage/azure` — an Azure Blob Storage backend, the object-store
   counterpart of `adapter/storage/s3`: `azure.New(client, container)` keys claims,
   content and bookmarks by their id strings as block blobs in one container, streams
