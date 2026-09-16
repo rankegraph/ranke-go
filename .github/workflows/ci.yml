@@ -29,7 +29,7 @@ jobs:
       RANKE_S3_ENDPOINT: http://127.0.0.1:9000
       RANKE_S3_KEY: minioadmin
       RANKE_S3_SECRET: minioadmin
-      RANKE_AZURE_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
+      RANKE_AZURE_ENDPOINT: http://127.0.0.1:10010/devstoreaccount1
 
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +39,8 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # `docker run`, not a services: block: redis needs --requirepass, minio needs
-      # `server /data` and azurite needs `azurite-blob`, and a service container
-      # cannot carry a command.
+      # `docker run`, not a services: block: redis needs --requirepass and minio
+      # needs `server /data`, and a service container cannot carry a command.
       # Started before the build so the slow one (neo4j) boots while Go compiles.
       - name: Start backends
         run: |
@@ -52,9 +51,18 @@ jobs:
           docker run -d --name ranke-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
             docker.io/minio/minio:latest server /data
-          docker run -d --name ranke-azurite -p 10000:10000 \
-            mcr.microsoft.com/azure-storage/azurite:latest \
-            azurite-blob --blobHost 0.0.0.0 --blobPort 10000
+
+      # Azurite from npm rather than its image: the runner has node, so the blob
+      # service starts without a registry pull or a published port, and it is the path
+      # `services/azurite.sh native` takes, so CI and a local run stay one story. It
+      # serves 10010 because the runner's 10000 is not ours to assume free — a docker
+      # run publishing it exited 125 here.
+      - name: Start Azurite
+        run: |
+          npm install -g azurite@3.37.0
+          mkdir -p "$RUNNER_TEMP/azurite"
+          nohup azurite-blob --blobHost 127.0.0.1 --blobPort 10010 \
+            --location "$RUNNER_TEMP/azurite" > "$RUNNER_TEMP/azurite.log" 2>&1 &
 
       # The spec the rule-citation gate reads (`RANKE_SPEC`, else docs/papers/) lives
       # in ranke-graph, so it is infrastructure like the services: fetched, not
@@ -113,7 +121,7 @@ jobs:
           # says it serves; -f would read that refusal as a dead service.
           azurite() {
             code="$(curl -s -o /dev/null -w '%{http_code}' \
-              'http://127.0.0.1:10000/devstoreaccount1?comp=list' || true)"
+              "${RANKE_AZURE_ENDPOINT}?comp=list" || true)"
             [ -n "$code" ] && [ "$code" != "000" ]
           }
           serving() {
@@ -128,6 +136,7 @@ jobs:
           done
           echo "backends did not come up within 300s" >&2
           docker ps -a
+          cat "$RUNNER_TEMP/azurite.log" || true
           exit 1
 
       # The full gate, the same target a developer runs locally, so the two cannot
