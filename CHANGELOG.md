@@ -16,11 +16,13 @@ What each release changed for someone depending on this repository.
   before); and the closure verifier, which is the only door left once such bytes exist
   elsewhere. `ErrCreatedAtPredatesRanke` names it, `PredatesAnyClaim` is the predicate.
 
-  **The published vector set must be regenerated.** Its cases are stamped 2023-11-14,
-  which this rule now refuses, so `cmd/vectors` dates them 2026-06-01 and every id in
-  the set moves. Until the set is regenerated from a release and republished,
-  `TestPublishedClaimVectors` fails against the old one. The scenario bundles are
-  unaffected — they were already dated 2026-05-19.
+  **Every id in the published vector set moved.** Its cases were stamped 2023-11-14,
+  which this rule refuses, so `cmd/vectors` dates them 2026-06-01 and each case carries
+  a new serialization and a new pinned id — same 27 claims and 9 bookmarks, none added,
+  removed or renamed. The set is published (ranke-graph v0.29.0, generated from
+  v0.35.0-rc.1), which `expectedGenerator` now names, so an implementation vendoring
+  the vectors takes them again and asserts against the new ids. The scenario bundles
+  are unaffected — they were already dated 2026-05-19.
 
 - **`Select.Claim` is `[]Id`, the set `R-QANCHOR` now admits.** A read anchors at one
   claim or at several, which fetches them by id in one query — the read a client makes
