@@ -18,6 +18,18 @@ var timeFields = []string{FieldDeleteBy, FieldPubkeyValidFrom, FieldPubkeyExpire
 // — the one spelling a time comparison takes (`R-QTIMEOP`).
 func FormatTimestamp(t time.Time) string { return t.UTC().Format(iso8601Nano) }
 
+// firstPossibleClaim is the day the design a claim conforms to came into being: the
+// foundation paper's date, which is the day ranke-graph was founded. No archive predates
+// it, so no claim was added before it, and every earlier timestamp is a default in place
+// of a time — year 1 where Go writes an unset time.Time, 1970 where a clock never
+// started, whatever a broken counter drifts to from there.
+var firstPossibleClaim = time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC)
+
+// PredatesAnyClaim reports whether t is earlier than any claim could have been added.
+// `V-MONO` requires created_at to carry the time a claim was added, and a value below
+// the floor carries what an unset field reads as instead.
+func PredatesAnyClaim(t time.Time) bool { return t.UTC().Before(firstPossibleClaim) }
+
 // checkTimestampFields parses every timestamp field present in fields. Absence is no
 // violation — all three are optional — so only a value that is there and will not
 // parse is refused.

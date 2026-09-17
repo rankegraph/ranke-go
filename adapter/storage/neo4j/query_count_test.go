@@ -85,7 +85,7 @@ func TestOneQueryPerRQL(t *testing.T) {
 	ctx := context.Background()
 	scope := ranke.Scope{Branch: ranke.BranchUniverse}
 	sel := ranke.Select{Branch: ranke.BranchUniverse, Head: head}
-	selPath := ranke.Select{Branch: ranke.BranchUniverse, Claim: head, Path: []ranke.PathStep{{Edges: []string{"derivation/*"}, Max: 3}}}
+	selPath := ranke.Select{Branch: ranke.BranchUniverse, Claim: ranke.Anchors(head), Path: []ranke.PathStep{{Edges: []string{"derivation/*"}, Max: 3}}}
 
 	cases := map[string]ranke.Query{
 		"single/id":     {Select: sel, Output: ranke.Output{Detail: ranke.DetailID}},
@@ -94,7 +94,7 @@ func TestOneQueryPerRQL(t *testing.T) {
 		"single/order":  {Select: sel, Order: []ranke.OrderKey{{Field: "height", Compare: ranke.CompareNumeric, Dir: ranke.SortDesc}}, Limit: ranke.Limit{Results: 10}},
 		"path/claims":   {Select: selPath, Output: ranke.Output{Shape: ranke.ShapePath, Detail: ranke.DetailClaims}},
 		// An unbounded traversal (one step, no depth) still reports routes.
-		"path/unbounded": {Select: ranke.Select{Branch: ranke.BranchUniverse, Claim: head, Path: []ranke.PathStep{{}}},
+		"path/unbounded": {Select: ranke.Select{Branch: ranke.BranchUniverse, Claim: ranke.Anchors(head), Path: []ranke.PathStep{{}}},
 			Output: ranke.Output{Shape: ranke.ShapePath}},
 	}
 	for name, q := range cases {

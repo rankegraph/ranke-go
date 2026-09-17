@@ -336,6 +336,9 @@ var verifyRules = []verifyRule{
 	// re-derivation, so a violation is named by the rule that FIXES the value.
 	{name: "first branch-table height", rule: "an archive's first branch table, standing on its contributor edge alone, has height 1 (`V-ARCHIVEHEIGHT`)", claim: ruleArchiveFirstTableHeight},
 	{name: "§4.1 height", rule: "height = 1 + max(reference heights), and 0 for an initial claim (`V-HEIGHT`)", claim: ruleHeight},
+	// Ahead of monotonicity: a claim dated at the zero instant orders against its
+	// references by an accident of what an unset field reads as.
+	{name: "created_at stated", rule: "a claim carries the time it was added, which neither zero instant states (`V-MONO`)", claim: ruleCreatedAtStated},
 	{name: "created_at monotonicity", rule: "a claim is dated no earlier than every claim it references (`V-MONO`)", claim: ruleCreatedAtMonotone},
 	{name: "type classes", rule: "the node's class and every edge's class is one of the fixed set, the subtype being open vocabulary (`V-TYPE`)", claim: ruleTypeClasses},
 	{name: "relation direction", rule: "a relation/* edge carries relation_direction 1 or -1, an edge of any other class 0 (`V-REL`)", edge: ruleRelationDirection},
@@ -416,6 +419,16 @@ func keyBound(signer Claim, field string) (*time.Time, error) {
 // ruleHeight: §4.1 committed height matches the reference structure (`V-HEIGHT`).
 func ruleHeight(ctx context.Context, t *claimUnderVerification) error {
 	return verifyHeight(ctx, t.claim, t.u)
+}
+
+// ruleCreatedAtStated: `V-MONO` — every claim carries created_at, and the zero instant
+// carries what an unset field reads as instead.
+func ruleCreatedAtStated(_ context.Context, t *claimUnderVerification) error {
+	at := t.claim.Node().CreatedAt()
+	if PredatesAnyClaim(at) {
+		return WithDetail(ErrCreatedAtPredatesRanke, dated(t.claim.ID(), at))
+	}
+	return nil
 }
 
 // ruleCreatedAtMonotone: `V-MONO` — created_at runs forward along every reference.

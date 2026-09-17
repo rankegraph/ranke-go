@@ -60,7 +60,7 @@ type fixture struct {
 func newFixture(t *testing.T, ctx context.Context) *fixture {
 	t.Helper()
 	u := ranke.NewMemoryUniverse()
-	clk := &clock{t: time.Unix(1000, 0).UTC()}
+	clk := &clock{t: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
 	op := operator(t, ctx, clk.Tick())
 	seq, err := concseq.NewSequencer(ctx, u, ranke.Seed([]byte(op.ID().String())), op, clk)
 	require.NoError(t, err)
@@ -480,7 +480,7 @@ func (n noBookmarks) Capabilities() ranke.Capabilities {
 // rather than at the first append, which is already one merge too late.
 func TestNewSequencerRefusesAUniverseHoldingNoBookmarks(t *testing.T) {
 	ctx := context.Background()
-	clk := &clock{t: time.Unix(1000, 0).UTC()}
+	clk := &clock{t: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
 	op := operator(t, ctx, clk.Tick())
 
 	_, err := concseq.NewSequencer(ctx, noBookmarks{ranke.NewMemoryUniverse()},

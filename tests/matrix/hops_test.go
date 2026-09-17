@@ -20,7 +20,7 @@ import (
 func TestHopsMinDefaultWalksAnEdge(t *testing.T) {
 	matrix.Each(t, matrix.FromSpec(generator.ToyUnwiredEntity(1)), func(t *testing.T, u ranke.Universe, m *generator.Manifest) {
 		got := reached(t, u, m.Head, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Claim: m.Relations[0],
+			Select: ranke.Select{Branch: rql.Branch, Claim: ranke.Anchors(m.Relations[0]),
 				Path: []ranke.PathStep{{Edges: []string{"relation/*"}, Nodes: []string{"entity/person"}}}},
 		})
 		require.Len(t, got, 2, "the relation wires two of the three entities")
@@ -34,7 +34,7 @@ func TestHopsMinZeroAdmitsTheStart(t *testing.T) {
 	matrix.Each(t, matrix.FromSpec(generator.ToyUnwiredEntity(1)), func(t *testing.T, u ranke.Universe, m *generator.Manifest) {
 		start := unwired(m)
 		got := reached(t, u, m.Head, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Claim: start,
+			Select: ranke.Select{Branch: rql.Branch, Claim: ranke.Anchors(start),
 				Path: []ranke.PathStep{{Min: ranke.Hops(0), Edges: []string{"relation/*"},
 					Nodes: []string{"entity/person"}}}},
 		})
@@ -48,7 +48,7 @@ func TestHopsMinZeroAdmitsTheStart(t *testing.T) {
 func TestHopsMinExcludesTheStart(t *testing.T) {
 	matrix.Each(t, matrix.FromSpec(generator.ToyUnwiredEntity(1)), func(t *testing.T, u ranke.Universe, m *generator.Manifest) {
 		got := reached(t, u, m.Head, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Claim: unwired(m),
+			Select: ranke.Select{Branch: rql.Branch, Claim: ranke.Anchors(unwired(m)),
 				Path: []ranke.PathStep{{Edges: []string{"relation/*"}, Nodes: []string{"entity/person"}}}},
 		})
 		require.Empty(t, got, "one hop is required and no relation edge leaves the start")
@@ -61,7 +61,7 @@ func TestHopsMinExcludesTheStart(t *testing.T) {
 func TestHopsMinAboveMax(t *testing.T) {
 	matrix.Each(t, matrix.FromSpec(generator.ToyUnwiredEntity(1)), func(t *testing.T, u ranke.Universe, m *generator.Manifest) {
 		_, err := rql.Run(context.Background(), u, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Claim: m.Relations[0],
+			Select: ranke.Select{Branch: rql.Branch, Claim: ranke.Anchors(m.Relations[0]),
 				Path: []ranke.PathStep{{Min: ranke.Hops(3), Max: 1, Edges: []string{"relation/*"}}}},
 		}, m.Head)
 		require.ErrorIs(t, err, ranke.ErrQueryHops, "no hop count satisfies both bounds")
@@ -80,7 +80,7 @@ func unwired(m *generator.Manifest) ranke.Id {
 func TestConnectionsTwoHops(t *testing.T) {
 	matrix.Each(t, matrix.FromSpec(generator.ToyRelation(1)), func(t *testing.T, u ranke.Universe, m *generator.Manifest) {
 		got := reached(t, u, m.Head, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Claim: m.Entities[0],
+			Select: ranke.Select{Branch: rql.Branch, Claim: ranke.Anchors(m.Entities[0]),
 				Path: []ranke.PathStep{{Dir: ranke.DirConnections, Edges: []string{"relation/*"}, Max: 2}}},
 		})
 		require.Contains(t, got, m.Relations[0].String(), "the relation is one hop away")

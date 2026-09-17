@@ -32,7 +32,7 @@ func (c *tickClock) Tick() time.Time {
 func newTestSequencer(t *testing.T, ctx context.Context) (*Sequencer, ranke.Universe, *ranke.Bookmarks, ranke.Contributor, *tickClock) {
 	t.Helper()
 	u := ranke.NewMemoryUniverse()
-	clk := &tickClock{t: time.Unix(1000, 0).UTC()}
+	clk := &tickClock{t: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
 
 	_, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)

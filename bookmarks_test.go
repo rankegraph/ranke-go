@@ -53,7 +53,9 @@ func appendN(t *testing.T, ctx context.Context, u Universe, b *Bookmarks, self C
 // hist, so a test can build a list of any shape — pruned, holed — that Append cannot.
 func plant(t *testing.T, ctx context.Context, u Universe, hist BookmarkStore, self Contributor, seed []byte, i int) Id {
 	t.Helper()
-	head := bmHead(t, self, time.Unix(1700000000+int64(i), 0).UTC())
+	// A month past the floor, so even the negative index a slot test plants dates a
+	// record a claim may carry.
+	head := bmHead(t, self, firstPossibleClaim.AddDate(0, 1, 0).Add(time.Duration(i)*time.Second))
 	putClaims(t, u, head)
 	raw, err := SignBookmark(self, uint64(i), seed, head.ID())
 	require.NoError(t, err)

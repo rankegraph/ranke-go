@@ -28,8 +28,10 @@ import (
 	"github.com/rankegraph/ranke-go/internal/vectors"
 )
 
-// epoch fixes every timestamp, so a regenerated set is byte-identical.
-var epoch = time.Unix(1700000000, 0).UTC()
+// epoch fixes every timestamp, so a regenerated set is byte-identical. It sits after
+// the day no claim predates, since the cases must verify against the rule as well as
+// exercise it (`V-MONO`).
+var epoch = time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 
 // generatorPath names this tool in the manifest.
 const generatorPath = "github.com/rankegraph/ranke-go/cmd/vectors"

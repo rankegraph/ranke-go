@@ -20,14 +20,13 @@ import (
 // expands from what the previous collected.
 func queryTraverse(ctx context.Context, u Universe, sel Select, origin Id, conf *confinement, needPaths bool, rc *reportCollector) ([]Claim, map[string][]Claim, error) {
 	steps := sel.Path
-	if len(steps) == 0 {
+	if steps == nil {
 		steps = []PathStep{{}} // all edges, provenance, unbounded → full closure
 	}
 
 	startAt := reportStart(rc)
 	frontier, err := walkStart(ctx, u, sel.Claim, origin, conf, rc)
 	if err != nil {
-		// A step always follows, so walkStart's output is a frontier, never an answer.
 		return nil, nil, err
 	}
 	rc.timed("native", "load-start", ReportInfo, startAt, "", map[string]any{"claims": len(frontier)})
@@ -57,7 +56,9 @@ func queryTraverse(ctx context.Context, u Universe, sel Select, origin Id, conf 
 	for _, c := range frontier {
 		routes[c.ID().String()] = []Claim{c}
 	}
-	var reached []Claim
+	// An empty Path takes no step, so the frontier is the answer and the scope admits
+	// it here rather than at a collection (`R-QSTEPS`, `R-QCSCOPE`).
+	reached := admitted(frontier, conf)
 	for i, step := range steps {
 		stepStart := reportStart(rc)
 		reached, err = queryWalkStep(ctx, u, frontier, step, incoming, routes, conf, needPaths, rc)
@@ -75,17 +76,39 @@ func queryTraverse(ctx context.Context, u Universe, sel Select, origin Id, conf 
 	return reached, routes, nil
 }
 
-// walkStart is the set the first step expands from: the claim Select.Claim names,
-// else every claim in closure(origin). The start need not be in the scope's graph —
-// a read is the intersection, so the walk begins where Select.Head says and the
-// scope decides what may be collected.
-func walkStart(ctx context.Context, u Universe, start, origin Id, conf *confinement, rc *reportCollector) ([]Claim, error) {
-	if start != nil {
-		c, err := GetClaim(ctx, u, start)
-		if err != nil {
-			return nil, WrapDetail(errQuery, "walk start "+start.String(), err)
+// admitted keeps the claims the scope's graph holds, in the order given.
+func admitted(cs []Claim, conf *confinement) []Claim {
+	if conf == nil {
+		return cs
+	}
+	out := make([]Claim, 0, len(cs))
+	for _, c := range cs {
+		if conf.admits(c) {
+			out = append(out, c)
 		}
-		return []Claim{c}, nil
+	}
+	return out
+}
+
+// walkStart is the set the first step expands from: the claims Select.Claim anchors,
+// each named once (`R-QANCHOR`), else every claim in closure(origin). A start outside
+// the scope's graph stands — a read is the intersection, and collection decides.
+func walkStart(ctx context.Context, u Universe, start []Id, origin Id, conf *confinement, rc *reportCollector) ([]Claim, error) {
+	if len(start) > 0 {
+		out := make([]Claim, 0, len(start))
+		seen := map[string]bool{}
+		for _, id := range start {
+			if id == nil || seen[id.String()] {
+				continue
+			}
+			seen[id.String()] = true
+			c, err := GetClaim(ctx, u, id)
+			if err != nil {
+				return nil, WrapDetail(errQuery, "walk start "+id.String(), err)
+			}
+			out = append(out, c)
+		}
+		return out, nil
 	}
 	c, err := GetClaim(ctx, u, origin)
 	if err != nil {

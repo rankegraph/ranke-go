@@ -195,7 +195,7 @@ func TestResultBoundFires(t *testing.T) {
 // keys, then the natural (created_at, id) tie-break that makes the order total.
 func TestAnswerOrderFires(t *testing.T) {
 	ctr := contributorFor(t)
-	base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	base := time.Date(2026, 6, 2, 3, 4, 5, 0, time.UTC)
 	early := claimAt(t, ctr, base, 1)
 	late := claimAt(t, ctr, base.Add(time.Hour), 2)
 	el := func(c ranke.Claim) ranke.QueryResult {

@@ -14,7 +14,7 @@ func toyBase(seed int64) Spec {
 	return Spec{
 		Seed: seed,
 		Size: 1,
-		Base: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Base: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
 		Step: time.Second,
 
 		Contributors:   1,

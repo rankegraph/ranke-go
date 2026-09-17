@@ -68,6 +68,11 @@ func AssembleClaim(parts ClaimParts) (Claim, error) {
 	if err := checkTimestampFields(parts.Fields); err != nil {
 		return nil, WrapDetail(errAssemble, "fields", err)
 	}
+	// Parts describe a record that exists, so an unset created_at is a projection that
+	// lost it rather than a value to default (`V-MONO`).
+	if PredatesAnyClaim(parts.CreatedAt) {
+		return nil, WrapDetail(errAssemble, "created_at", ErrCreatedAtPredatesRanke)
+	}
 	// `V-DATED`: absence is no violation — dated is optional.
 	if parts.Dated != "" {
 		if err := validateDated(parts.Dated); err != nil {

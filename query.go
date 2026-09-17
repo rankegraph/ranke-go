@@ -34,13 +34,18 @@ const (
 
 // Select is a generator: Branch is the scope, Head narrows it to one claim's
 // closure (`R-QHEAD`), Claim anchors the frontier (`R-QANCHOR`) and Path is the
-// traversal; no Path reads the frontier's outward closure (`R-QSTEPS`).
+// traversal. The two empties of Path differ (`R-QSTEPS`): an EMPTY Path takes no step
+// and returns the frontier, a NIL one its full outward closure.
 type Select struct {
 	Branch string // scope: BranchUniverse, BranchArchive, or a branch name
 	Head   Id     // narrows the scope to this claim's closure
-	Claim  Id     // anchors the frontier; nil leaves the pattern unanchored
+	Claim  []Id   // anchors the frontier at one claim or a set; nil leaves it unanchored
 	Path   []PathStep
 }
+
+// Anchors is Select.Claim over the ids given — the frontier `R-QANCHOR` names, whether
+// one claim or a set of them.
+func Anchors(ids ...Id) []Id { return ids }
 
 // PathStep follows typed edges over a hop range, optionally constraining endpoint
 // node types. Entries are globs over "class/sub"; a leading "-" excludes.

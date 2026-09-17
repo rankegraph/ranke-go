@@ -101,7 +101,7 @@ func TestBoundedReadFromAnchoredClaimKeepsWhatItReached(t *testing.T) {
 	wrapped := &ctxRespecting{Universe: u, afterN: 50}
 
 	rs, err := DefaultQuery(context.Background(), wrapped, Query{
-		Select:    Select{Branch: BranchUniverse, Head: head.ID(), Claim: head.ID()},
+		Select:    Select{Branch: BranchUniverse, Head: head.ID(), Claim: Anchors(head.ID())},
 		Limit:     Limit{Time: time.Hour},
 		Execution: Execution{Report: ReportInfo},
 	}, Scope{Branch: BranchUniverse})
@@ -122,7 +122,7 @@ func TestBoundedMultiStepYieldsNoIntermediateFrontier(t *testing.T) {
 	wrapped := &ctxRespecting{Universe: u, afterN: 50}
 
 	rs, err := DefaultQuery(context.Background(), wrapped, Query{
-		Select: Select{Branch: BranchUniverse, Head: head.ID(), Claim: head.ID(), Path: []PathStep{
+		Select: Select{Branch: BranchUniverse, Head: head.ID(), Claim: Anchors(head.ID()), Path: []PathStep{
 			{Edges: []string{"derivation/*"}},             // step 0 — the budget runs out here
 			{Nodes: []string{"contribution/contributor"}}, // step 1 — what the query actually asks for
 		}},

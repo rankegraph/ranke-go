@@ -85,7 +85,7 @@ func SpecForSize(seed int64, size int) Spec {
 	return Spec{
 		Seed: seed,
 		Size: size,
-		Base: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Base: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
 		Step: time.Second,
 
 		Contributors:     clampMin(size/10, 2),

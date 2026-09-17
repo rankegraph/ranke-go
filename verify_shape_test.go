@@ -281,13 +281,14 @@ func TestAssembleRefusesBothContentSlots(t *testing.T) {
 	t.Run("node", func(t *testing.T) {
 		_, err := AssembleClaim(ClaimParts{
 			ID: ctr.ID(), Type: "source/note", Encoding: "text/plain",
+			CreatedAt:   ctr.Node().CreatedAt(),
 			ContentHash: hash, ContentSize: 12, InlineContent: []byte("inline bytes"),
 		})
 		require.ErrorIs(t, err, ErrContentBothSlots)
 	})
 	t.Run("edge", func(t *testing.T) {
 		_, err := AssembleClaim(ClaimParts{
-			ID: ctr.ID(), Type: "source/note", Height: 1,
+			ID: ctr.ID(), Type: "source/note", Height: 1, CreatedAt: ctr.Node().CreatedAt(),
 			Edges: []EdgeParts{{ID: ctr.ID(), Reference: ctr.ID(),
 				Type: "derivation/source", Encoding: "text/plain",
 				ContentHash: hash, ContentSize: 12, InlineContent: []byte("inline bytes")}},
@@ -309,10 +310,12 @@ func TestBothSlotsWouldHaveLostItsOwnBytes(t *testing.T) {
 	// is legal, and shown to disagree — which is why neither may stand for the pair.
 	inline := assembled(t, ClaimParts{
 		ID: ctr.ID(), Type: "source/note", Encoding: "text/plain",
+		CreatedAt:     ctr.Node().CreatedAt(),
 		InlineContent: []byte("inline bytes"), ContentSize: 12,
 	})
 	external := assembled(t, ClaimParts{
 		ID: ctr.ID(), Type: "source/note", Encoding: "text/plain",
+		CreatedAt:   ctr.Node().CreatedAt(),
 		ContentHash: hash, ContentSize: 12,
 	})
 	inlineBytes, err := inline.EncodeCBOR(FormOriginal)

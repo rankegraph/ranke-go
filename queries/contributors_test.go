@@ -34,7 +34,7 @@ type fixture struct {
 // restarts into.
 func founded(t *testing.T, ctx context.Context) *fixture {
 	t.Helper()
-	clock := generator.NewClock(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), time.Second)
+	clock := generator.NewClock(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), time.Second)
 	u := mem.New()
 
 	priv := helpers.FoundedKey("queries-sequencer")

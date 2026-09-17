@@ -11,6 +11,17 @@ import (
 // A real id, so the codec's ParseId path runs on something that parses.
 const testQueryId = "bciqmi5j5hnobbrzqrcqeeodhegnb3o4rozbeh24woow3sxdxbzb2qsi"
 
+// secondTestQueryId is another real id, for the set form `claim` also takes (`R-QANCHOR`).
+const secondTestQueryId = "bciqd3vsbjnbihsf2xbhlkgfmaqkxqjc7azsbm3cfnvhlqyfmbdmmyoy"
+
+// secondQueryId is secondTestQueryId parsed, for a Query built in Go.
+func secondQueryId(t *testing.T) Id {
+	t.Helper()
+	id, err := ParseId(secondTestQueryId)
+	require.NoError(t, err)
+	return id
+}
+
 // Every document here was also run through the published rql.schema.json with ajv and
 // accepted. A case added here belongs there too, or the two drift apart.
 func TestDecodeQueryAcceptsSchemaValid(t *testing.T) {
@@ -24,6 +35,8 @@ func TestDecodeQueryAcceptsSchemaValid(t *testing.T) {
 		{"nested where", `{"select":{"branch":"main"},"where":{"and":[{"or":[{"field":"type","test":{"glob":"source/*"}},{"field":"type","test":{"glob":"derivation/*"}}]},{"not":{"field":"height","test":{"eq":0}}}]}}`},
 		{"content cap", `{"select":{"branch":"main"},"output":{"content":{"max":4096,"overflow":"cutoff"},"encoding":"cbor"}}`},
 		{"order and limit", `{"select":{"branch":"main"},"order":[{"field":"height","compare":"numeric","dir":"desc"}],"limit":{"results":200,"time":"5s"}}`},
+		{"anchor set", `{"select":{"branch":"main","claim":["` + testQueryId + `","` + secondTestQueryId + `"],"path":[]}}`},
+		{"empty path", `{"select":{"branch":"main","claim":"` + testQueryId + `","path":[]}}`},
 		{"min zero carries the start", `{"select":{"branch":"main","path":[{"min":0,"nodes":["source/*"]}]}}`},
 		{"unbounded step", `{"select":{"branch":"main","path":[{"edges":["derivation/*"],"max":0}]}}`},
 		{"execution", `{"select":{"branch":"main"},"execution":{"layer":"neo4j","report":"debug"}}`},
@@ -60,6 +73,9 @@ func TestDecodeQueryRefusesSchemaInvalid(t *testing.T) {
 		{"unknown top-level field", `{"select":{"branch":"m"},"selct":{}}`, errDecodeQuery},
 		{"unknown step field", `{"select":{"branch":"m","path":[{"hops":2}]}}`, errDecodeQuery},
 		{"malformed id", `{"select":{"branch":"$universe","head":"NOT-A-MULTIBASE-ID"}}`, errDecodeQuery},
+		{"anchor set repeats an id", `{"select":{"branch":"m","claim":["` + testQueryId + `","` + testQueryId + `"]}}`, ErrQueryAnchorSet},
+		{"anchor set names none", `{"select":{"branch":"m","claim":[]}}`, ErrQueryAnchorSet},
+		{"anchor is neither an id nor a set", `{"select":{"branch":"m","claim":{"id":"` + testQueryId + `"}}}`, ErrQueryAnchorSet},
 		{"malformed duration", `{"select":{"branch":"m"},"limit":{"time":"5 seconds"}}`, errDecodeQuery},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,8 +96,12 @@ func TestQueryRoundTripsThroughTheWire(t *testing.T) {
 	}{
 		{"scan", Query{Select: Select{Branch: "main"}}},
 		{"universe", Query{Select: Select{Branch: BranchUniverse, Head: head}}},
-		{"anchored path", Query{Select: Select{Branch: "main", Claim: head,
+		{"anchored path", Query{Select: Select{Branch: "main", Claim: Anchors(head),
 			Path: []PathStep{{Edges: []string{"derivation/*"}, Max: 3}}}}},
+		{"anchor set", Query{Select: Select{Branch: "main", Claim: Anchors(head, secondQueryId(t)),
+			Path: []PathStep{{Edges: []string{"derivation/*"}}}}}},
+		{"empty path", Query{Select: Select{Branch: "main", Claim: Anchors(head),
+			Path: []PathStep{}}}},
 		{"min zero", Query{Select: Select{Branch: "main",
 			Path: []PathStep{{Min: Hops(0), Nodes: []string{"source/*"}}}}}},
 		{"dir uses", Query{Select: Select{Branch: "main",

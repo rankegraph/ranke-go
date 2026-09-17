@@ -18,7 +18,7 @@ import (
 
 const (
 	expiryDeclared = "2026-12-31T00:00:00.000000000Z" // what the contributor claim declares
-	expiryRevoked  = "2026-03-01T00:00:00.000000000Z" // what the expiry edge shortens it to
+	expiryRevoked  = "2026-09-01T00:00:00.000000000Z" // what the expiry edge shortens it to
 )
 
 // stamp parses one of the fixed instants above.
@@ -49,7 +49,7 @@ func expiryEdge(t *testing.T, who Claim, until string) Edge {
 func revokedGraph(t *testing.T, at time.Time, carry func(*testing.T, Contributor, Claim) Claim) []Failure {
 	t.Helper()
 	ctx := context.Background()
-	who, _ := windowedContributor(t, "", expiryDeclared, stamp(t, "2026-01-01T00:00:00.000000000Z"))
+	who, _ := windowedContributor(t, "", expiryDeclared, stamp(t, "2026-06-01T00:00:00.000000000Z"))
 	g := newGraph(t, who)
 
 	signed := signedAt(t, who, at)
@@ -69,7 +69,7 @@ func byExpiryClaim(t *testing.T, who Contributor, _ Claim) Claim {
 	c, err := NewClaim(NodeExpiry, who).
 		WithEdges(expiryEdge(t, who, expiryRevoked)).
 		WithHeight(HeightOf(who)).
-		WithCreatedAt(stamp(t, "2026-02-01T00:00:00.000000000Z")).
+		WithCreatedAt(stamp(t, "2026-08-01T00:00:00.000000000Z")).
 		Sign()
 	require.NoError(t, err)
 	return c
@@ -78,7 +78,7 @@ func byExpiryClaim(t *testing.T, who Contributor, _ Claim) Claim {
 // TestExpiryEdgeShortensTheWindow: a claim dated after the revoked end fails, where the
 // contributor's own declared end would have admitted it.
 func TestExpiryEdgeShortensTheWindow(t *testing.T) {
-	fs := revokedGraph(t, stamp(t, "2026-06-01T00:00:00.000000000Z"), byExpiryClaim)
+	fs := revokedGraph(t, stamp(t, "2026-12-01T00:00:00.000000000Z"), byExpiryClaim)
 
 	require.NotEmpty(t, fs, "a claim signed after the revocation must fail")
 	var found bool
@@ -93,7 +93,7 @@ func TestExpiryEdgeShortensTheWindow(t *testing.T) {
 // TestExpiryEdgeAdmitsWhatPrecedesIt is the control: the same graph, a claim dated before
 // the revoked end. Without it the rule could pass by refusing everything.
 func TestExpiryEdgeAdmitsWhatPrecedesIt(t *testing.T) {
-	fs := revokedGraph(t, stamp(t, "2026-02-15T00:00:00.000000000Z"), byExpiryClaim)
+	fs := revokedGraph(t, stamp(t, "2026-08-15T00:00:00.000000000Z"), byExpiryClaim)
 	require.Empty(t, fs, "a claim signed before the revocation still verifies")
 }
 
@@ -116,16 +116,16 @@ func TestExpiryOnSuccessorContributorHasTheSameEffect(t *testing.T) {
 			WithField(FieldPubkeyValidFrom, expiryRevoked). // the successor's own window
 			WithEdges(expiryEdge(t, who, expiryRevoked)).   // the predecessor's revocation
 			WithHeight(HeightOf(who)).
-			WithCreatedAt(stamp(t, "2026-02-01T00:00:00.000000000Z")).
+			WithCreatedAt(stamp(t, "2026-08-01T00:00:00.000000000Z")).
 			Sign()
 		require.NoError(t, err)
 		return c
 	}
 
-	after := revokedGraph(t, stamp(t, "2026-06-01T00:00:00.000000000Z"), successor)
+	after := revokedGraph(t, stamp(t, "2026-12-01T00:00:00.000000000Z"), successor)
 	require.NotEmpty(t, after, "a successor's expiry edge revokes the predecessor too")
 
-	before := revokedGraph(t, stamp(t, "2026-02-15T00:00:00.000000000Z"), successor)
+	before := revokedGraph(t, stamp(t, "2026-08-15T00:00:00.000000000Z"), successor)
 	require.Empty(t, before, "and admits what precedes it, as the other carrier does")
 }
 

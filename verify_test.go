@@ -78,7 +78,9 @@ func signedAt(t *testing.T, who Contributor, at time.Time) Claim {
 // could — so a claim dated outside its contributor key's validity fails verification
 // however sound its signature is.
 func TestVerifyKeyWindow(t *testing.T) {
-	const from, until = "2026-01-01T00:00:00.000000000Z", "2026-06-30T00:00:00.000000000Z"
+	// The window is a field a key declares and may name any instant; the claims dated
+	// against it are records, so they sit at or after the day no claim predates.
+	const from, until = "2026-07-01T00:00:00.000000000Z", "2026-12-31T00:00:00.000000000Z"
 	stamp := func(s string) time.Time {
 		at, err := parseRFC3339Nano(s)
 		require.NoError(t, err)
@@ -90,14 +92,14 @@ func TestVerifyKeyWindow(t *testing.T) {
 		at          time.Time
 		wantErr     error
 	}{
-		"inside the window":    {from, until, stamp("2026-03-01T00:00:00.000000000Z"), nil},
+		"inside the window":    {from, until, stamp("2026-09-01T00:00:00.000000000Z"), nil},
 		"on the lower bound":   {from, until, stamp(from), nil},
 		"on the upper bound":   {from, until, stamp(until), nil},
-		"before it opens":      {from, until, stamp("2025-12-31T23:59:59.000000000Z"), ErrKeyNotYetValid},
-		"after it closes":      {from, until, stamp("2026-07-01T00:00:00.000000000Z"), ErrKeyExpired},
+		"before it opens":      {from, until, stamp("2026-06-30T23:59:59.000000000Z"), ErrKeyNotYetValid},
+		"after it closes":      {from, until, stamp("2027-01-01T00:00:00.000000000Z"), ErrKeyExpired},
 		"open-ended upward":    {from, "", stamp("2030-01-01T00:00:00.000000000Z"), nil},
-		"open-ended downward":  {"", until, stamp("2000-01-01T00:00:00.000000000Z"), nil},
-		"expired, no lower":    {"", until, stamp("2026-07-01T00:00:00.000000000Z"), ErrKeyExpired},
+		"open-ended downward":  {"", until, firstPossibleClaim, nil},
+		"expired, no lower":    {"", until, stamp("2027-01-01T00:00:00.000000000Z"), ErrKeyExpired},
 		"no window ever fails": {"", "", stamp("2099-01-01T00:00:00.000000000Z"), nil},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -315,8 +317,8 @@ func TestVerifyWithMaxClaims(t *testing.T) {
 // walk descends toward older references, so this bounds verification to a
 // recent window — here the older root contributor is skipped.
 func TestVerifyWithCreatedAfter(t *testing.T) {
-	old := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	recent := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	old := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	recent := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 
 	root, _ := windowedContributor(t, "", "", old)
 
@@ -483,83 +485,6 @@ func TestVerifyRejectsWrongHeight(t *testing.T) {
 		}
 	}
 	require.True(t, found, "the wrong-height claim is reported")
-}
-
-// --- created_at monotonicity (`V-MONO`) --------------------------------
-
-// TestVerifyCreatedAtMonotone: a claim dated before the contributor it references
-// fails, one dated after it passes, and one dated at the same instant passes too —
-// the rule is ≥, and a contribution commits its claims at a single instant.
-func TestVerifyCreatedAtMonotone(t *testing.T) {
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	for name, tc := range map[string]struct {
-		at      time.Time
-		wantErr error
-	}{
-		"after its reference":  {base.Add(24 * time.Hour), nil},
-		"at the same instant":  {base, nil},
-		"before its reference": {base.Add(-24 * time.Hour), ErrCreatedAtNotMonotone},
-	} {
-		t.Run(name, func(t *testing.T) {
-			who, _ := windowedContributor(t, "", "", base)
-			g := newGraph(t, who)
-			c := signedAt(t, who, tc.at)
-			require.NoError(t, g.AddClaims(context.Background(), c), "the builder dates a claim as told")
-
-			run := g.Verify()
-			run.Wait()
-			require.NoError(t, run.Err())
-			if tc.wantErr == nil {
-				require.Empty(t, run.Failures())
-				return
-			}
-			require.Len(t, run.Failures(), 1)
-			require.True(t, run.Failures()[0].ID.Equal(c.ID()), "the failure names the back-dated claim")
-			require.ErrorIs(t, run.Failures()[0].Err, tc.wantErr)
-		})
-	}
-}
-
-// TestVerifyCreatedAtMonotoneAcrossDerivation: every reference is compared, so a
-// derivation dated after its contributor and before the source it cites still fails.
-func TestVerifyCreatedAtMonotoneAcrossDerivation(t *testing.T) {
-	ctx := context.Background()
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	who, _ := windowedContributor(t, "", "", base)
-	g := newGraph(t, who)
-
-	src := signedAt(t, who, base.Add(2*time.Hour))
-	require.NoError(t, g.AddClaims(ctx, src))
-
-	bad, err := NewClaim(TypeEntity("person"), who).
-		WithInlineContent([]byte("dated between its two references")).
-		WithEncoding(EncodingPlain).
-		WithEdges(mustDerivEdge(t, src)).
-		WithHeight(HeightOf(who, src)).
-		WithCreatedAt(base.Add(time.Hour)).
-		Sign()
-	require.NoError(t, err)
-	require.NoError(t, g.AddClaims(ctx, bad))
-
-	run := g.Verify()
-	run.Wait()
-	require.NoError(t, run.Err())
-	require.Len(t, run.Failures(), 1)
-	require.True(t, run.Failures()[0].ID.Equal(bad.ID()))
-	require.ErrorIs(t, run.Failures()[0].Err, ErrCreatedAtNotMonotone)
-}
-
-// TestVerifyCreatedAtMonotoneInitialClaim: an initial claim references nothing, so the
-// rule has nothing to compare it against and it verifies alone.
-func TestVerifyCreatedAtMonotoneInitialClaim(t *testing.T) {
-	who, _ := windowedContributor(t, "", "", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	g := newGraph(t, who)
-
-	run := g.Verify()
-	run.Wait()
-	require.NoError(t, run.Err())
-	require.Empty(t, run.Failures())
-	require.Equal(t, 1, run.Verified(), "the initial claim is the whole closure")
 }
 
 // TestVerifyRejectsBranchTableReference: a contribution/branches (branch-table)

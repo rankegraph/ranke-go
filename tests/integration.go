@@ -56,8 +56,9 @@ type fixture struct {
 	self ranke.Contributor
 }
 
-// fixtureBase is the fixed instant the shared clock starts at, so a run reproduces byte-identically.
-var fixtureBase = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+// fixtureBase is the fixed instant the shared clock starts at, so a run reproduces
+// byte-identically. It sits after the day no claim predates (`V-MONO`).
+var fixtureBase = time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 
 func newFixture(t *testing.T, ctx context.Context, backend Backend) *fixture {
 	t.Helper()

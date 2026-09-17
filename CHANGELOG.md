@@ -4,6 +4,41 @@ What each release changed for someone depending on this repository.
 
 ## Unreleased
 
+### Changed
+
+- **A claim dated before 2026-05-03 is refused.** That is the foundation paper's date,
+  the day the design a claim conforms to was founded: no archive predates it, so no
+  claim was added before it, and every earlier timestamp is a default in place of the
+  time `V-MONO` requires — year 1 where Go writes an unset `time.Time`, 1970 where a
+  clock never started, whatever a broken counter drifts to from there. All three doors
+  refuse it: `AssembleClaim`, where parts describe a record a projection rebuilt;
+  `NewClaim`, where a caller states one (an UNSET `CreatedAt` still takes the clock, as
+  before); and the closure verifier, which is the only door left once such bytes exist
+  elsewhere. `ErrCreatedAtPredatesRanke` names it, `PredatesAnyClaim` is the predicate.
+
+  **Every id in the published vector set moved.** Its cases were stamped 2023-11-14,
+  which this rule refuses, so `cmd/vectors` dates them 2026-06-01 and each case carries
+  a new serialization and a new pinned id — same 27 claims and 9 bookmarks, none added,
+  removed or renamed. The set is published (ranke-graph v0.29.0, generated from
+  v0.35.0-rc.1), which `expectedGenerator` now names, so an implementation vendoring
+  the vectors takes them again and asserts against the new ids. The scenario bundles
+  are unaffected — they were already dated 2026-05-19.
+
+- **`Select.Claim` is `[]Id`, the set `R-QANCHOR` now admits.** A read anchors at one
+  claim or at several, which fetches them by id in one query — the read a client makes
+  to resolve `height` before signing, since `V-HEIGHT` fixes it from the claims the new
+  one references and no server can fill it in. `ranke.Anchors(ids...)` builds the field,
+  and on the wire `claim` stays a plain string for a single anchor and becomes an array
+  for a set. A repeat names its claim once; the wire form refuses one outright, as the
+  schema's `uniqueItems` states.
+- **The two empties of `Select.Path` differ (`R-QSTEPS`).** An EMPTY path takes no step
+  and returns the frontier itself — with a set anchor, exactly the claims named and
+  nothing they cite — where a NIL path still returns that frontier's full outward
+  closure. A Go caller spells the difference as `[]PathStep{}` against `nil`, and the
+  wire as `"path": []` against an absent `path`; `EncodeQuery` keeps the two apart.
+  Every backend answers alike: the neo4j lowering pins a single anchor by id, matches a
+  set by membership, and carries no segment for an empty path (`R-QCCLAUSE`).
+
 ### Added
 
 - A claim may be signed under **ECDSA over P-256**, the second scheme `V-SIGN` now

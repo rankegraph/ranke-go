@@ -81,7 +81,7 @@ func TestBranchConfinesAReverseStep(t *testing.T) {
 		// free to run as far as the graph allows is the one confinement must bound.
 		uses := func(branch string) []string {
 			return reached(t, u, m.Head, ranke.Query{
-				Select: ranke.Select{Branch: branch, Claim: src,
+				Select: ranke.Select{Branch: branch, Claim: ranke.Anchors(src),
 					Path: []ranke.PathStep{{Dir: ranke.DirUses, Edges: []string{"derivation/*"}}}},
 			})
 		}
@@ -95,7 +95,7 @@ func TestBranchConfinesAReverseStep(t *testing.T) {
 		// A path shape lowers through a pipeline of its own, so its route is confined
 		// separately: one route, ending at the branch's own referrer.
 		route, err := rql.Run(context.Background(), u, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Claim: src,
+			Select: ranke.Select{Branch: rql.Branch, Claim: ranke.Anchors(src),
 				Path: []ranke.PathStep{{Dir: ranke.DirUses, Edges: []string{"derivation/*"}}}},
 			Output: ranke.Output{Shape: ranke.ShapePath, Detail: ranke.DetailID},
 		}, m.Head)
