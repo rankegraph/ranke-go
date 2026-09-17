@@ -61,7 +61,7 @@ func eachRevisionBackend(t *testing.T, check func(*testing.T, ranke.Universe, re
 // two revisions whose membership differs by exactly one claim. It writes at build
 // time; the tests reading it afterwards do not, which is what lets them share it.
 func buildRevisions(ctx context.Context, u ranke.Universe) (revisions, error) {
-	clock := generator.NewClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Second)
+	clock := generator.NewClock(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), time.Second)
 
 	priv := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
 	pubkey, err := ranke.EncodePublicKey(priv.Public())

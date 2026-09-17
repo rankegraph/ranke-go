@@ -656,7 +656,7 @@ func TestBuilderHeightResolverIsSugarForAutoHeight(t *testing.T) {
 
 	build := func(b ClaimBuilder) uint64 {
 		c, err := b.WithInlineContent([]byte("b")).WithEncoding(EncodingPlain).
-			WithEdges(mustDerivEdge(t, a)).WithCreatedAt(time.Unix(1, 0).UTC()).Sign()
+			WithEdges(mustDerivEdge(t, a)).WithCreatedAt(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)).Sign()
 		require.NoError(t, err)
 		return c.Node().Height()
 	}

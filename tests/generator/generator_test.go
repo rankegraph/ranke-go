@@ -24,7 +24,7 @@ func TestDatedFormsAreSortable(t *testing.T) {
 // the property the whole generator (and the cross-impl conformance promise)
 // rests on.
 
-var genBase = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+var genBase = time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 
 func TestContributorDeterministic(t *testing.T) {
 	ctx := context.Background()

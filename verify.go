@@ -425,8 +425,8 @@ func ruleHeight(ctx context.Context, t *claimUnderVerification) error {
 // carries what an unset field reads as instead.
 func ruleCreatedAtStated(_ context.Context, t *claimUnderVerification) error {
 	at := t.claim.Node().CreatedAt()
-	if NamesNoInstant(at) {
-		return WithDetail(ErrCreatedAtZero, dated(t.claim.ID(), at))
+	if PredatesAnyClaim(at) {
+		return WithDetail(ErrCreatedAtPredatesRanke, dated(t.claim.ID(), at))
 	}
 	return nil
 }

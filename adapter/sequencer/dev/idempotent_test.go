@@ -22,7 +22,7 @@ import (
 func newSeqWithUniverse(t *testing.T, ctx context.Context) (*devseq.Sequencer, ranke.Universe, ranke.Contributor, *clock) {
 	t.Helper()
 	u := ranke.NewMemoryUniverse()
-	clk := &clock{t: time.Unix(1000, 0).UTC()}
+	clk := &clock{t: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
 	op := operator(t, ctx, clk.Tick())
 	seq, err := devseq.NewSequencer(ctx, u, ranke.Seed([]byte(op.ID().String())), op, clk)
 	require.NoError(t, err)

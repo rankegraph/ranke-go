@@ -219,13 +219,13 @@ func TestReportTimestampMatchesAcrossEncodings(t *testing.T) {
 func TestClaimBytesIgnoreTheTimeMode(t *testing.T) {
 	alice := contributor(t)
 	c, err := NewClaim(TypeSource("note"), alice).
-		WithCreatedAt(time.Date(2026, 1, 2, 3, 4, 5, 123456789, time.UTC)).
+		WithCreatedAt(time.Date(2026, 6, 2, 3, 4, 5, 123456789, time.UTC)).
 		WithHeight(HeightOf(alice)).
 		Sign()
 	require.NoError(t, err)
 
 	raw, err := c.EncodeCBOR(FormOriginal)
 	require.NoError(t, err)
-	require.Contains(t, string(raw), "2026-01-02T03:04:05.123456789Z",
+	require.Contains(t, string(raw), "2026-06-02T03:04:05.123456789Z",
 		"created_at is text in the record, whatever the encoder does with a time.Time")
 }

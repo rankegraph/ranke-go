@@ -6,15 +6,21 @@ What each release changed for someone depending on this repository.
 
 ### Changed
 
-- **A claim dated at the zero instant is refused.** `V-MONO` requires every claim to
-  carry the time it was added, and the zero instant is what an unset field reads as —
-  year 1 where Go writes one, 1970 wherever seconds are counted from the epoch — so it
-  carries a default rather than a time. All three doors refuse it: `AssembleClaim`,
-  where parts describe a record a projection rebuilt; `NewClaim`, where a caller states
-  the epoch outright (an UNSET `CreatedAt` still takes the clock, as before); and the
-  closure verifier, which is the only door left once such bytes exist elsewhere.
-  `ErrCreatedAtZero` names it and `NamesNoInstant` is the predicate, for a caller
-  checking its own input.
+- **A claim dated before 2026-05-03 is refused.** That is the foundation paper's date,
+  the day the design a claim conforms to was founded: no archive predates it, so no
+  claim was added before it, and every earlier timestamp is a default in place of the
+  time `V-MONO` requires — year 1 where Go writes an unset `time.Time`, 1970 where a
+  clock never started, whatever a broken counter drifts to from there. All three doors
+  refuse it: `AssembleClaim`, where parts describe a record a projection rebuilt;
+  `NewClaim`, where a caller states one (an UNSET `CreatedAt` still takes the clock, as
+  before); and the closure verifier, which is the only door left once such bytes exist
+  elsewhere. `ErrCreatedAtPredatesRanke` names it, `PredatesAnyClaim` is the predicate.
+
+  **The published vector set must be regenerated.** Its cases are stamped 2023-11-14,
+  which this rule now refuses, so `cmd/vectors` dates them 2026-06-01 and every id in
+  the set moves. Until the set is regenerated from a release and republished,
+  `TestPublishedClaimVectors` fails against the old one. The scenario bundles are
+  unaffected — they were already dated 2026-05-19.
 
 - **`Select.Claim` is `[]Id`, the set `R-QANCHOR` now admits.** A read anchors at one
   claim or at several, which fetches them by id in one query — the read a client makes

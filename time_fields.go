@@ -18,16 +18,17 @@ var timeFields = []string{FieldDeleteBy, FieldPubkeyValidFrom, FieldPubkeyExpire
 // — the one spelling a time comparison takes (`R-QTIMEOP`).
 func FormatTimestamp(t time.Time) string { return t.UTC().Format(iso8601Nano) }
 
-// epochInstant is the other zero a timestamp arrives as: a field counted in seconds
-// from 1970 and never set reads back as this, the way an unset Go time reads as year 1.
-var epochInstant = time.Unix(0, 0).UTC()
+// firstPossibleClaim is the day the design a claim conforms to came into being: the
+// foundation paper's date, which is the day ranke-graph was founded. No archive predates
+// it, so no claim was added before it, and every earlier timestamp is a default in place
+// of a time — year 1 where Go writes an unset time.Time, 1970 where a clock never
+// started, whatever a broken counter drifts to from there.
+var firstPossibleClaim = time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC)
 
-// NamesNoInstant reports whether t is a timestamp that states nothing: Go's zero value,
-// or the Unix epoch an unset counter reads as. `V-MONO` requires every claim to carry
-// created_at, and a claim dated at either carries a default rather than a time.
-func NamesNoInstant(t time.Time) bool {
-	return t.IsZero() || t.UTC().Equal(epochInstant)
-}
+// PredatesAnyClaim reports whether t is earlier than any claim could have been added.
+// `V-MONO` requires created_at to carry the time a claim was added, and a value below
+// the floor carries what an unset field reads as instead.
+func PredatesAnyClaim(t time.Time) bool { return t.UTC().Before(firstPossibleClaim) }
 
 // checkTimestampFields parses every timestamp field present in fields. Absence is no
 // violation — all three are optional — so only a value that is there and will not

@@ -78,7 +78,9 @@ func signedAt(t *testing.T, who Contributor, at time.Time) Claim {
 // could — so a claim dated outside its contributor key's validity fails verification
 // however sound its signature is.
 func TestVerifyKeyWindow(t *testing.T) {
-	const from, until = "2026-01-01T00:00:00.000000000Z", "2026-06-30T00:00:00.000000000Z"
+	// The window is a field a key declares and may name any instant; the claims dated
+	// against it are records, so they sit at or after the day no claim predates.
+	const from, until = "2026-07-01T00:00:00.000000000Z", "2026-12-31T00:00:00.000000000Z"
 	stamp := func(s string) time.Time {
 		at, err := parseRFC3339Nano(s)
 		require.NoError(t, err)
@@ -90,14 +92,14 @@ func TestVerifyKeyWindow(t *testing.T) {
 		at          time.Time
 		wantErr     error
 	}{
-		"inside the window":    {from, until, stamp("2026-03-01T00:00:00.000000000Z"), nil},
+		"inside the window":    {from, until, stamp("2026-09-01T00:00:00.000000000Z"), nil},
 		"on the lower bound":   {from, until, stamp(from), nil},
 		"on the upper bound":   {from, until, stamp(until), nil},
-		"before it opens":      {from, until, stamp("2025-12-31T23:59:59.000000000Z"), ErrKeyNotYetValid},
-		"after it closes":      {from, until, stamp("2026-07-01T00:00:00.000000000Z"), ErrKeyExpired},
+		"before it opens":      {from, until, stamp("2026-06-30T23:59:59.000000000Z"), ErrKeyNotYetValid},
+		"after it closes":      {from, until, stamp("2027-01-01T00:00:00.000000000Z"), ErrKeyExpired},
 		"open-ended upward":    {from, "", stamp("2030-01-01T00:00:00.000000000Z"), nil},
-		"open-ended downward":  {"", until, stamp("2000-01-01T00:00:00.000000000Z"), nil},
-		"expired, no lower":    {"", until, stamp("2026-07-01T00:00:00.000000000Z"), ErrKeyExpired},
+		"open-ended downward":  {"", until, firstPossibleClaim, nil},
+		"expired, no lower":    {"", until, stamp("2027-01-01T00:00:00.000000000Z"), ErrKeyExpired},
 		"no window ever fails": {"", "", stamp("2099-01-01T00:00:00.000000000Z"), nil},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -315,8 +317,8 @@ func TestVerifyWithMaxClaims(t *testing.T) {
 // walk descends toward older references, so this bounds verification to a
 // recent window — here the older root contributor is skipped.
 func TestVerifyWithCreatedAfter(t *testing.T) {
-	old := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	recent := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	old := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	recent := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 
 	root, _ := windowedContributor(t, "", "", old)
 

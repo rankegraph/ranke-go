@@ -13,7 +13,7 @@ import (
 // and an inline claim carries no content_hash.
 func TestInlineContentInID(t *testing.T) {
 	alice := contributor(t)
-	at := time.Unix(1, 0).UTC() // same timestamp both builds → only content differs
+	at := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC) // same timestamp both builds → only content differs
 	build := func(body []byte) Claim {
 		c, err := NewClaim(TypeSource("note"), alice).
 			WithInlineContent(body).
@@ -38,7 +38,7 @@ func TestInlinePreimageConsistency(t *testing.T) {
 	c, err := NewClaim(TypeSource("note"), alice).
 		WithInlineContent([]byte("hello world")).
 		WithEncoding(EncodingPlain).
-		WithCreatedAt(time.Unix(1, 0).UTC()).
+		WithCreatedAt(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)).
 		WithHeight(HeightOf(alice)).
 		Sign()
 	require.NoError(t, err)

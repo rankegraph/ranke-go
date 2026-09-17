@@ -128,7 +128,7 @@ func TestConcurrentContributionsLoseNothing(t *testing.T) {
 func runConcurrentWriters(t *testing.T, u ranke.Universe, sr sequencerRow, n int) {
 	t.Helper()
 	ctx := context.Background()
-	clk := &tickClock{t: time.Unix(1_000_000, 0).UTC()}
+	clk := &tickClock{t: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)}
 	op := operatorFor(t, ctx, clk.Tick())
 	seq, err := sr.New(ctx, u, op, clk)
 	require.NoError(t, err)

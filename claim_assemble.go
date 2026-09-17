@@ -70,8 +70,8 @@ func AssembleClaim(parts ClaimParts) (Claim, error) {
 	}
 	// Parts describe a record that exists, so an unset created_at is a projection that
 	// lost it rather than a value to default (`V-MONO`).
-	if NamesNoInstant(parts.CreatedAt) {
-		return nil, WrapDetail(errAssemble, "created_at", ErrCreatedAtZero)
+	if PredatesAnyClaim(parts.CreatedAt) {
+		return nil, WrapDetail(errAssemble, "created_at", ErrCreatedAtPredatesRanke)
 	}
 	// `V-DATED`: absence is no violation — dated is optional.
 	if parts.Dated != "" {
