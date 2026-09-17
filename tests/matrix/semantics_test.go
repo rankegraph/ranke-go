@@ -56,7 +56,7 @@ func TestToyAnchoredScanIsTheClaimsClosure(t *testing.T) {
 		base := diffPredecessor(t, u, delta)
 
 		anchored := reached(t, u, m.Head, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Claim: base},
+			Select: ranke.Select{Branch: rql.Branch, Claim: ranke.Anchors(base)},
 		})
 		require.Contains(t, anchored, base.String(), "the anchor is in its own closure")
 		require.NotContains(t, anchored, delta.String(), "what overlays the anchor is not")
@@ -85,7 +85,7 @@ func TestToyAnchoredScanUnderAHeadIsTheIntersection(t *testing.T) {
 		base := diffPredecessor(t, u, delta)
 
 		both := reached(t, u, m.Head, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Head: delta, Claim: base},
+			Select: ranke.Select{Branch: rql.Branch, Head: delta, Claim: ranke.Anchors(base)},
 		})
 		require.Contains(t, both, base.String(), "the anchor, inside the Head's closure")
 		require.NotContains(t, both, delta.String(), "and not what the Head reaches past it")
@@ -100,7 +100,7 @@ func TestToyAnchoredScanOutsideTheHeadMatchesTheWalk(t *testing.T) {
 		delta := m.DiffChainHead
 		base := diffPredecessor(t, u, delta) // delta overlays base, so it sits outside closure(base)
 
-		sel := ranke.Select{Branch: rql.Branch, Head: base, Claim: delta}
+		sel := ranke.Select{Branch: rql.Branch, Head: base, Claim: ranke.Anchors(delta)}
 		scan := reached(t, u, m.Head, ranke.Query{Select: sel})
 		require.Contains(t, scan, delta.String(), "the anchor answers, whatever the Head reaches")
 

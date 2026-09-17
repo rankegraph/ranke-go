@@ -159,10 +159,50 @@ func TestQueryPathNodeExclude(t *testing.T) {
 	q := Query{Select: Select{
 		Branch: BranchUniverse,
 		Head:   a["hub"].ID(),
-		Claim:  a["hub"].ID(),
+		Claim:  Anchors(a["hub"].ID()),
 		Path:   []PathStep{{Nodes: []string{"entity/*", "-entity/object"}}},
 	}}
 	require.Equal(t, idsOf(a["eAlice"]), queryIDs(t, u, q))
+}
+
+// TestQueryEmptyPathReturnsTheFrontier: the two empties of Path differ (`R-QSTEPS`) —
+// an EMPTY Path takes no step and returns the anchor itself, where a NIL one returns
+// that anchor's whole outward closure.
+func TestQueryEmptyPathReturnsTheFrontier(t *testing.T) {
+	u, a := queryOpsFixture(t)
+	anchored := Select{Branch: BranchUniverse, Head: a["hub"].ID(), Claim: Anchors(a["hub"].ID())}
+
+	noStep := anchored
+	noStep.Path = []PathStep{}
+	require.Equal(t, idsOf(a["hub"]), queryIDs(t, u, Query{Select: noStep}),
+		"an empty path names the frontier and nothing it cites")
+
+	closure := queryIDs(t, u, Query{Select: anchored})
+	require.Greater(t, len(closure), 1, "an absent path still reads the closure")
+	require.True(t, closure[a["hub"].ID().String()], "which the frontier is part of")
+}
+
+// TestQueryAnchorSet: `claim` anchors a set, so one read fetches several claims by id —
+// what a client resolving `height` before signing asks for (`R-QANCHOR`). Every member
+// expands when a step follows, and a repeat names its claim once.
+func TestQueryAnchorSet(t *testing.T) {
+	u, a := queryOpsFixture(t)
+	sel := func(path []PathStep, anchors ...Id) Query {
+		return Query{Select: Select{Branch: BranchUniverse, Head: a["hub"].ID(),
+			Claim: anchors, Path: path}}
+	}
+
+	require.Equal(t, idsOf(a["s1"], a["s2"]),
+		queryIDs(t, u, sel([]PathStep{}, a["s1"].ID(), a["s2"].ID())),
+		"a set anchor with no step returns exactly the claims it names")
+
+	require.Equal(t, idsOf(a["s1"], a["s2"]),
+		queryIDs(t, u, sel([]PathStep{}, a["s1"].ID(), a["s2"].ID(), a["s1"].ID())),
+		"a repeated anchor names its claim once")
+
+	both := queryIDs(t, u, sel([]PathStep{{Min: Hops(0)}}, a["s1"].ID(), a["eAlice"].ID()))
+	require.True(t, both[a["s1"].ID().String()] && both[a["eAlice"].ID().String()],
+		"a step expands from every member of the frontier, not the first alone")
 }
 
 // TestQueryPathEdgeExclude: excluding contribution/* edges makes the root
@@ -172,7 +212,7 @@ func TestQueryPathEdgeExclude(t *testing.T) {
 	q := Query{Select: Select{
 		Branch: BranchUniverse,
 		Head:   a["hub"].ID(),
-		Claim:  a["hub"].ID(),
+		Claim:  Anchors(a["hub"].ID()),
 		Path:   []PathStep{{Min: Hops(0), Edges: []string{"-contribution/*"}}},
 	}}
 	got := queryIDs(t, u, q)

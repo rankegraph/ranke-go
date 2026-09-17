@@ -4,6 +4,23 @@ What each release changed for someone depending on this repository.
 
 ## Unreleased
 
+### Changed
+
+- **`Select.Claim` is `[]Id`, the set `R-QANCHOR` now admits.** A read anchors at one
+  claim or at several, which fetches them by id in one query — the read a client makes
+  to resolve `height` before signing, since `V-HEIGHT` fixes it from the claims the new
+  one references and no server can fill it in. `ranke.Anchors(ids...)` builds the field,
+  and on the wire `claim` stays a plain string for a single anchor and becomes an array
+  for a set. A repeat names its claim once; the wire form refuses one outright, as the
+  schema's `uniqueItems` states.
+- **The two empties of `Select.Path` differ (`R-QSTEPS`).** An EMPTY path takes no step
+  and returns the frontier itself — with a set anchor, exactly the claims named and
+  nothing they cite — where a NIL path still returns that frontier's full outward
+  closure. A Go caller spells the difference as `[]PathStep{}` against `nil`, and the
+  wire as `"path": []` against an absent `path`; `EncodeQuery` keeps the two apart.
+  Every backend answers alike: the neo4j lowering pins a single anchor by id, matches a
+  set by membership, and carries no segment for an empty path (`R-QCCLAUSE`).
+
 ### Added
 
 - A claim may be signed under **ECDSA over P-256**, the second scheme `V-SIGN` now

@@ -87,14 +87,14 @@ func TestNeo4jQueryOrderLimit(t *testing.T) {
 func TestNeo4jQueryPathDepth(t *testing.T) {
 	u, head := openTestNeo4j(t)
 	runReported(t, u, "derivation path depth 3", ranke.Query{
-		Select: ranke.Select{Branch: ranke.BranchUniverse, Claim: head, Path: []ranke.PathStep{{Edges: []string{"derivation/*"}, Max: 3}}},
+		Select: ranke.Select{Branch: ranke.BranchUniverse, Claim: ranke.Anchors(head), Path: []ranke.PathStep{{Edges: []string{"derivation/*"}, Max: 3}}},
 	})
 }
 
 func TestNeo4jQueryDetailPath(t *testing.T) {
 	u, head := openTestNeo4j(t)
 	runReported(t, u, "derivation path depth 3, shape=path", ranke.Query{
-		Select: ranke.Select{Branch: ranke.BranchUniverse, Claim: head, Path: []ranke.PathStep{{Edges: []string{"derivation/*"}, Max: 3}}},
+		Select: ranke.Select{Branch: ranke.BranchUniverse, Claim: ranke.Anchors(head), Path: []ranke.PathStep{{Edges: []string{"derivation/*"}, Max: 3}}},
 		Output: ranke.Output{Shape: ranke.ShapePath},
 	})
 }

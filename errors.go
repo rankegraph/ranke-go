@@ -93,18 +93,22 @@ var (
 	// --- Operation-prefix sentinels (fmt.Errorf replacements) ---
 	// Used with wrap/wrapDetail: the sentinel is the operation prefix, the
 	// detail carries the stage or a dynamic value, the cause is wrapped.
-	errNewClaim              = errors.New("ranke.NewClaim")
-	errNewEdge               = errors.New("ranke.NewEdge")
-	errRelationDirNonRel     = errors.New("ranke.NewEdge: RelationDirection must be 0 for non-relation edges")
-	errBuildGraph            = errors.New("ranke.NewGraphFromClosure")
-	errGraphAddClaim         = errors.New("ranke.Graph.AddClaims")
-	errConsolidate           = errors.New("ranke.Graph.Consolidate")
-	errCopyClaims            = errors.New("ranke.CopyClaims")
-	errCopyContents          = errors.New("ranke.CopyContents")
-	errQuery                 = errors.New("ranke.Query")
-	ErrQueryNoHead           = errors.New("ranke.Query: Select.Head is required under $universe (it has no natural head to scope by)")
-	ErrQueryNoScope          = errors.New("ranke.Query: Select.Branch is required (scope is mandatory — use BranchUniverse for an unconfined read)")
-	ErrQueryScanShape        = errors.New("ranke.Query: a scan (no Select.Path) reaches claims by no stated route, so Output.Shape must be single")
+	errNewClaim          = errors.New("ranke.NewClaim")
+	errNewEdge           = errors.New("ranke.NewEdge")
+	errRelationDirNonRel = errors.New("ranke.NewEdge: RelationDirection must be 0 for non-relation edges")
+	errBuildGraph        = errors.New("ranke.NewGraphFromClosure")
+	errGraphAddClaim     = errors.New("ranke.Graph.AddClaims")
+	errConsolidate       = errors.New("ranke.Graph.Consolidate")
+	errCopyClaims        = errors.New("ranke.CopyClaims")
+	errCopyContents      = errors.New("ranke.CopyContents")
+	errQuery             = errors.New("ranke.Query")
+	ErrQueryNoHead       = errors.New("ranke.Query: Select.Head is required under $universe (it has no natural head to scope by)")
+	ErrQueryNoScope      = errors.New("ranke.Query: Select.Branch is required (scope is mandatory — use BranchUniverse for an unconfined read)")
+	ErrQueryScanShape    = errors.New("ranke.Query: a scan (no Select.Path) reaches claims by no stated route, so Output.Shape must be single")
+	// ErrQueryAnchorSet: select.claim is one id or a set of them, holding at least one
+	// and naming each once (`R-QANCHOR`). The engine reads a repeat as the one claim it
+	// names; the wire form refuses it, the schema's set being a set on both counts.
+	ErrQueryAnchorSet        = errors.New("ranke.DecodeQuery: select.claim is an id or a non-empty set of distinct ids (`R-QANCHOR`)")
 	ErrQueryEncoding         = errors.New("ranke.Query: unknown Output.Encoding (native | json | cbor)")
 	errDecodeQuery           = errors.New("ranke.DecodeQuery")
 	errEncodeQuery           = errors.New("ranke.EncodeQuery")

@@ -1,8 +1,9 @@
 // package: ranke / query_codec
 // type:    io
 // job:     the RQL wire codec — a Query to and from the canonical JSON that ranke-graph's
-// rql.schema.json fixes, plus the shape checks a query must pass before an engine sees it
-// limits:  shape only; which claims a read returns is the executor's (-> query_default)
+// rql.schema.json fixes
+// limits:  the wire form only; the shape checks a decoded query passes live beside it
+// (-> query_validate), and which claims a read returns is the executor's (-> query_default)
 package ranke
 
 import (
@@ -45,224 +46,6 @@ func EncodeQuery(q Query) ([]byte, error) {
 	return out, nil
 }
 
-// ValidateQuery holds a query to the schema's rules plus the one it cannot state, a
-// step's Min against its Max. Wire and Go callers share it, so both reach one verdict.
-func ValidateQuery(q Query) error {
-	if q.Select.Branch == "" {
-		return ErrQueryNoScope
-	}
-	if q.Select.Branch == BranchUniverse && q.Select.Head == nil {
-		return ErrQueryNoHead
-	}
-	for i, step := range q.Select.Path {
-		if err := validateStep(step); err != nil {
-			return WithDetail(err, "select.path["+strconv.Itoa(i)+"]")
-		}
-	}
-	if q.Where != nil {
-		if err := validateWhere(*q.Where); err != nil {
-			return err
-		}
-	}
-	if err := validateOutput(q.Output); err != nil {
-		return err
-	}
-	// A cap is a count, which the schema bounds at zero. Zero is the unbounded read.
-	if q.Limit.Results < 0 {
-		return WithDetail(ErrQueryBounds, "limit.results "+strconv.Itoa(q.Limit.Results))
-	}
-	if q.Limit.Time < 0 {
-		return WithDetail(ErrQueryBounds, "limit.time "+q.Limit.Time.String())
-	}
-	for i, key := range q.Order {
-		// A sort key names the field it orders on; an empty one names nothing.
-		if key.Field == "" {
-			return WithDetail(ErrQueryOrderField, "order["+strconv.Itoa(i)+"]")
-		}
-		if err := oneOf("order.compare", string(key.Compare), "", string(CompareNumeric), string(CompareLexical), string(CompareTemporal)); err != nil {
-			return err
-		}
-		if err := oneOf("order.dir", string(key.Dir), "", string(SortAsc), string(SortDesc)); err != nil {
-			return err
-		}
-	}
-	// A Go caller's empty Layer is an ABSENT one; whitespace states a name and gives
-	// none. The wire tells absent from empty and refuses the latter (`R-QLAYER`).
-	if q.Execution.Layer != "" && strings.TrimSpace(q.Execution.Layer) == "" {
-		return WithDetail(ErrQueryLayerName, "execution.layer")
-	}
-	return oneOf("execution.report", string(q.Execution.Report), "",
-		string(ReportError), string(ReportWarn), string(ReportInfo), string(ReportDebug), string(ReportTrace))
-}
-
-// validateStep checks dir and hops. Max 0 is unbounded, so only a bounded Max can sit under Min.
-func validateStep(step PathStep) error {
-	if err := oneOf("dir", string(step.Dir), "", string(DirProvenance), string(DirUses), string(DirConnections)); err != nil {
-		return err
-	}
-	// A hop count is a count, which the schema bounds at zero on both ends. A negative
-	// one breaks that bound as well as the step rule, so it matches ErrQueryBounds too:
-	// a caller watching traversals reads ErrQueryHops, one checking every schema minimum
-	// reads ErrQueryBounds, and neither has to know the other's sentinel.
-	hopBound := alsoMatches(ErrQueryHops, ErrQueryBounds)
-	if step.Min != nil && *step.Min < 0 {
-		return WithDetail(hopBound, "min "+strconv.Itoa(*step.Min)+" is negative")
-	}
-	if step.Max < 0 {
-		return WithDetail(hopBound, "max "+strconv.Itoa(step.Max)+" is negative")
-	}
-	// A floor above a bounded ceiling breaks no bound, so it stays the step rule alone.
-	if step.Max > 0 && step.MinHops() > step.Max {
-		return WithDetail(ErrQueryHops, strconv.Itoa(step.MinHops())+" > "+strconv.Itoa(step.Max))
-	}
-	return nil
-}
-
-// validateWhere holds every node of the tree to exactly one form.
-func validateWhere(w Where) error {
-	forms := 0
-	if len(w.And) > 0 {
-		forms++
-	}
-	if len(w.Or) > 0 {
-		forms++
-	}
-	if w.Not != nil {
-		forms++
-	}
-	if w.Field != "" || w.Test != nil {
-		forms++
-	}
-	if forms != 1 {
-		return WithDetail(ErrQueryWhereForm, strconv.Itoa(forms)+" forms set")
-	}
-	if w.Field != "" || w.Test != nil {
-		if w.Field == "" || w.Test == nil {
-			return WithDetail(ErrQueryWhereForm, "a leaf carries both a field and a test")
-		}
-		return validateComparison(w.Field, *w.Test)
-	}
-	for _, sub := range append(append([]Where{}, w.And...), w.Or...) {
-		if err := validateWhere(sub); err != nil {
-			return err
-		}
-	}
-	if w.Not != nil {
-		return validateWhere(*w.Not)
-	}
-	return nil
-}
-
-// validateComparison holds a comparison to one operator. An explicit empty `in` set
-// counts, being present.
-func validateComparison(field string, c Comparison) error {
-	ops := 0
-	for _, set := range []bool{
-		c.Eq != nil, c.Ne != nil, c.Lt != nil, c.Le != nil,
-		c.Gt != nil, c.Ge != nil, c.In != nil, c.Glob != "",
-	} {
-		if set {
-			ops++
-		}
-	}
-	if ops != 1 {
-		return WithDetail(ErrQueryComparisonForm, strconv.Itoa(ops)+" operators set")
-	}
-	check := timeOperandCheck(field)
-	if check == nil {
-		return nil
-	}
-	for _, v := range append([]any{c.Eq, c.Ne, c.Lt, c.Le, c.Gt, c.Ge}, c.In...) {
-		if v == nil {
-			continue
-		}
-		s, ok := v.(string)
-		if !ok {
-			return WithDetail(ErrQueryTimeOperand, field+" is "+toStringValue(v))
-		}
-		if err := check(s); err != nil {
-			return WithDetail(ErrQueryTimeOperand, field+"="+s)
-		}
-	}
-	if c.Glob != "" {
-		// A pattern names no time, being neither form.
-		return WithDetail(ErrQueryTimeOperand, field+" glob "+c.Glob)
-	}
-	return nil
-}
-
-// timeOperandCheck returns the form `R-QTIMEOP` holds a comparison on field to, or
-// nil where no time rule governs it. The FIELD picks which of the two forms applies:
-// EDTF admits `2026-01-01T00:00:02Z` as readily as the fixed-width spelling, so
-// allowing either form on a `V-TIME` field would leave one instant with several
-// spellings — and a text comparison lands on a different second for each.
-func timeOperandCheck(field string) func(string) error {
-	switch field {
-	case "created_at", FieldDeleteBy, FieldPubkeyValidFrom, FieldPubkeyExpiresAfter:
-		return func(s string) error { _, err := parseRFC3339Nano(s); return err }
-	case "dated":
-		return validateDated
-	default:
-		return nil
-	}
-}
-
-// validateOutput checks each output axis against the values the schema fixes.
-func validateOutput(o Output) error {
-	if err := oneOf("output.shape", string(o.Shape), "", string(ShapeSingle), string(ShapePath)); err != nil {
-		return err
-	}
-	if err := oneOf("output.detail", string(o.Detail), "", string(DetailID), string(DetailClaims), string(DetailEnvelope)); err != nil {
-		return err
-	}
-	if err := oneOf("output.form", string(o.Form), "", string(FormOriginal), string(FormMaterialized)); err != nil {
-		return err
-	}
-	if err := oneOf("output.encoding", string(o.Encoding), "", string(ResultNative), string(ResultJSON), string(ResultCBOR)); err != nil {
-		return err
-	}
-	if err := validateEnvelopeOutput(o); err != nil {
-		return err
-	}
-	if o.Content == nil {
-		return nil
-	}
-	// A byte cap is a count, which the schema bounds at zero.
-	if o.Content.Max < 0 {
-		return WithDetail(ErrQueryBounds, "output.content.max "+strconv.Itoa(o.Content.Max))
-	}
-	// An absent overflow is omit (`R-QCONTENT`), so the pair needs only its cap.
-	return oneOf("output.content.overflow", string(o.Content.Overflow),
-		"", string(OverflowCutoff), string(OverflowOmit))
-}
-
-// validateEnvelopeOutput refuses the axes an envelope cannot answer for
-// (`R-QDETAIL`). The bytes are the stored ones, so a resolved overlay is not among
-// them and JSON is not what they are; both requests ask for something else under the
-// name of the original.
-func validateEnvelopeOutput(o Output) error {
-	if o.Detail != DetailEnvelope {
-		return nil
-	}
-	if o.Form == FormMaterialized {
-		return WithDetail(ErrQueryEnvelopeAxis, "output.form materialized")
-	}
-	if o.Encoding == ResultJSON {
-		return WithDetail(ErrQueryEnvelopeAxis, "output.encoding json")
-	}
-	return nil
-}
-
-// oneOf reports whether got is among allowed, naming the field when it is not.
-func oneOf(field, got string, allowed ...string) error {
-	for _, want := range allowed {
-		if got == want {
-			return nil
-		}
-	}
-	return WithDetail(ErrQueryEnum, field+"="+strconv.Quote(got))
-}
-
 // --- the wire shapes ------------------------------------------------------
 //
 // A parallel set of types rather than tags on Query: an Id interface cannot unmarshal
@@ -279,10 +62,38 @@ type wireQuery struct {
 }
 
 type wireSelect struct {
-	Branch string         `json:"branch"`
-	Head   *string        `json:"head,omitempty"`
-	Claim  *string        `json:"claim,omitempty"`
-	Path   []wirePathStep `json:"path,omitempty"`
+	Branch string          `json:"branch"`
+	Head   *string         `json:"head,omitempty"`
+	Claim  wireAnchor      `json:"claim,omitempty"`
+	Path   *[]wirePathStep `json:"path,omitempty"` // a pointer: [] is not absent (`R-QSTEPS`)
+}
+
+// wireAnchor is `claim` on the wire: one id, or the set of them `R-QANCHOR` also admits,
+// which JSON spells as a string or an array of strings.
+type wireAnchor []string
+
+// UnmarshalJSON reads either spelling, so a single id needs no array around it.
+func (a *wireAnchor) UnmarshalJSON(data []byte) error {
+	var one string
+	if err := json.Unmarshal(data, &one); err == nil {
+		*a = wireAnchor{one}
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(data, &many); err != nil {
+		return WithDetail(ErrQueryAnchorSet, "select.claim is an id or an array of them")
+	}
+	*a = many
+	return nil
+}
+
+// MarshalJSON writes one anchor as the id itself, so a query that named one reads back
+// as it was written.
+func (a wireAnchor) MarshalJSON() ([]byte, error) {
+	if len(a) == 1 {
+		return json.Marshal(a[0])
+	}
+	return json.Marshal([]string(a))
 }
 
 type wirePathStep struct {
@@ -442,21 +253,52 @@ func (w wireSelect) selection() (Select, error) {
 		return sel, err
 	}
 	sel.Head = head
-	claim, err := parseOptionalId("select.claim", w.Claim)
+	anchors, err := w.Claim.ids()
 	if err != nil {
 		return sel, err
 	}
-	sel.Claim = claim
-	for _, step := range w.Path {
-		sel.Path = append(sel.Path, PathStep{
-			Edges: step.Edges,
-			Dir:   Direction(step.Dir),
-			Min:   step.Min,
-			Max:   derefOr(step.Max, 0),
-			Nodes: step.Nodes,
-		})
+	sel.Claim = anchors
+	// An empty path is a path: it takes no step and returns the frontier, where an
+	// absent one returns that frontier's closure (`R-QSTEPS`).
+	if w.Path != nil {
+		sel.Path = []PathStep{}
+		for _, step := range *w.Path {
+			sel.Path = append(sel.Path, PathStep{
+				Edges: step.Edges,
+				Dir:   Direction(step.Dir),
+				Min:   step.Min,
+				Max:   derefOr(step.Max, 0),
+				Nodes: step.Nodes,
+			})
+		}
 	}
 	return sel, nil
+}
+
+// ids parses the anchors, holding the wire to a set: at least one id, each named once
+// (`R-QANCHOR`). A Go caller's repeat is the engine's to read as one claim; a wire one
+// is a malformed document.
+func (a wireAnchor) ids() ([]Id, error) {
+	if a == nil {
+		return nil, nil
+	}
+	if len(a) == 0 {
+		return nil, WithDetail(ErrQueryAnchorSet, "select.claim names no id")
+	}
+	out := make([]Id, 0, len(a))
+	seen := map[string]bool{}
+	for _, encoded := range a {
+		if seen[encoded] {
+			return nil, WithDetail(ErrQueryAnchorSet, "select.claim repeats "+encoded)
+		}
+		seen[encoded] = true
+		parsed, err := ParseId(encoded)
+		if err != nil {
+			return nil, WrapDetail(errDecodeQuery, "select.claim", err)
+		}
+		out = append(out, parsed)
+	}
+	return out, nil
 }
 
 // where maps one node of the boolean tree, recursing into its subtrees.
@@ -621,16 +463,26 @@ func newWireSelect(sel Select) wireSelect {
 		head := sel.Head.String()
 		w.Head = &head
 	}
-	if sel.Claim != nil {
-		claim := sel.Claim.String()
-		w.Claim = &claim
-	}
-	for _, step := range sel.Path {
-		out := wirePathStep{Edges: step.Edges, Dir: string(step.Dir), Min: step.Min, Nodes: step.Nodes}
-		if step.Max != 0 {
-			out.Max = &step.Max
+	// A repeat names its claim once (`R-QANCHOR`), and the wire holds a set, so the
+	// rendering is where a Go caller's repeat goes.
+	seen := map[string]bool{}
+	for _, id := range sel.Claim {
+		if id == nil || seen[id.String()] {
+			continue
 		}
-		w.Path = append(w.Path, out)
+		seen[id.String()] = true
+		w.Claim = append(w.Claim, id.String())
+	}
+	if sel.Path != nil {
+		steps := make([]wirePathStep, 0, len(sel.Path))
+		for _, step := range sel.Path {
+			out := wirePathStep{Edges: step.Edges, Dir: string(step.Dir), Min: step.Min, Nodes: step.Nodes}
+			if step.Max != 0 {
+				out.Max = &step.Max
+			}
+			steps = append(steps, out)
+		}
+		w.Path = &steps
 	}
 	return w
 }

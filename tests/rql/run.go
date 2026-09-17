@@ -150,7 +150,13 @@ func idOf(id ranke.Id) string {
 func Describe(q ranke.Query) string {
 	parts := []string{"branch=" + q.Select.Branch}
 	if len(q.Select.Path) == 0 {
-		parts = append(parts, "closure")
+		// The two empties read differently: an absent path is the closure, an empty
+		// one the frontier it would have expanded (`R-QSTEPS`).
+		if q.Select.Path == nil {
+			parts = append(parts, "closure")
+		} else {
+			parts = append(parts, "frontier")
+		}
 	} else {
 		for _, s := range q.Select.Path {
 			seg := "path("

@@ -71,7 +71,7 @@ func TestConfineHeadOutsideBranchReadsNothing(t *testing.T) {
 func TestConfineClaimOutsideBranchReadsNothing(t *testing.T) {
 	u, a := twoBranches(t)
 	q := Query{Select: Select{
-		Branch: "a", Claim: a["sB"].ID(),
+		Branch: "a", Claim: Anchors(a["sB"].ID()),
 		Path: []PathStep{{Min: Hops(0), Max: 3}},
 	}}
 
@@ -84,7 +84,7 @@ func TestConfineClaimOutsideBranchReadsNothing(t *testing.T) {
 func TestConfineClaimInsideBranchStillReads(t *testing.T) {
 	u, a := twoBranches(t)
 	q := Query{Select: Select{
-		Branch: "a", Claim: a["sA"].ID(),
+		Branch: "a", Claim: Anchors(a["sA"].ID()),
 		Path: []PathStep{{Min: Hops(0), Max: 3}},
 	}}
 
@@ -152,7 +152,7 @@ func TestConfineReverseStepStaysInBranch(t *testing.T) {
 	// Who uses src? Branch a holds inA only, so the answer is inA — never inB,
 	// though both reference src and the walk starts from b's head.
 	q := Query{Select: Select{
-		Branch: "a", Head: inB.ID(), Claim: src.ID(),
+		Branch: "a", Head: inB.ID(), Claim: Anchors(src.ID()),
 		Path: []PathStep{{Dir: DirUses, Max: 1}},
 	}}
 	got := reachedUnder(t, u, q, confinedTo("a", inA))

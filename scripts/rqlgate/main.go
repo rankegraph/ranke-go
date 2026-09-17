@@ -25,7 +25,7 @@ const schemaEnv = "RANKE_RQL_SCHEMA"
 // the third defect of this class was a minLength nobody thought to look for.
 var knownKeywords = map[string]bool{
 	"enum": true, "const": true, "required": true, "additionalProperties": true,
-	"minimum": true, "minLength": true, "minItems": true,
+	"minimum": true, "minLength": true, "minItems": true, "uniqueItems": true,
 	"minProperties": true, "maxProperties": true, "pattern": true,
 }
 
@@ -123,6 +123,11 @@ var valueProbes = []valueProbe{
 		"branch is required: scope is mandatory (`R-QSCOPE`)"},
 	{"Where.oneOf.minItems", baseWire(`"where":{"and":[]}`),
 		"an empty and-list is not a filter"},
+	{"Select.claim.oneOf.minItems", baseWire(`"select":{"branch":"main","claim":[]}`),
+		"an anchor set names at least one claim (`R-QANCHOR`)"},
+	{"Select.claim.oneOf.uniqueItems", baseWire(
+		`"select":{"branch":"main","claim":["bciqmi5j5hnobbrzqrcqeeodhegnb3o4rozbeh24woow3sxdxbzb2qsi","bciqmi5j5hnobbrzqrcqeeodhegnb3o4rozbeh24woow3sxdxbzb2qsi"]}`),
+		"an anchor set holds each id once (`R-QANCHOR`)"},
 	{"Comparison.minProperties", baseWire(`"where":{"field":"type"}`),
 		"a comparison applies exactly one operator"},
 	{"Comparison.maxProperties", baseWire(`"where":{"field":"type","eq":1,"ne":2}`),

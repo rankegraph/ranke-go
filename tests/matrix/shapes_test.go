@@ -47,7 +47,7 @@ func TestShapeAnchoredTraversal(t *testing.T) {
 	matrix.Each(t, matrix.FromSpec(generator.ToyDiff(1)), func(t *testing.T, u ranke.Universe, m *generator.Manifest) {
 		base := diffPredecessor(t, u, m.DiffChainHead)
 		got := reached(t, u, m.Head, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Claim: base,
+			Select: ranke.Select{Branch: rql.Branch, Claim: ranke.Anchors(base),
 				Path: []ranke.PathStep{{Edges: []string{"derivation/*"}, Nodes: []string{"source/*"}}}},
 		})
 		require.ElementsMatch(t, idStrings(m.Sources), got,
@@ -77,7 +77,7 @@ func TestShapePathRecrossesAnEdge(t *testing.T) {
 		base := diffPredecessor(t, u, delta)
 
 		answer, err := rql.Run(context.Background(), u, ranke.Query{
-			Select: ranke.Select{Branch: rql.Branch, Claim: delta, Path: []ranke.PathStep{
+			Select: ranke.Select{Branch: rql.Branch, Claim: ranke.Anchors(delta), Path: []ranke.PathStep{
 				{Edges: []string{"contribution/diff"}, Min: ranke.Hops(1), Max: 1},
 				{Edges: []string{"contribution/diff"}, Dir: ranke.DirUses, Min: ranke.Hops(1), Max: 1},
 			}},

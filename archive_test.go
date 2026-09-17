@@ -339,12 +339,12 @@ func TestQueryClaimDoesNotScope(t *testing.T) {
 	require.NoError(t, err)
 
 	step := []PathStep{{Min: Hops(0)}}
-	_, err = arc.Query(ctx, Query{Select: Select{Branch: BranchUniverse, Claim: em.ID(), Path: step}})
+	_, err = arc.Query(ctx, Query{Select: Select{Branch: BranchUniverse, Claim: Anchors(em.ID()), Path: step}})
 	require.ErrorIs(t, err, ErrQueryNoHead, "$universe needs a Head; a Claim is not one")
 
 	// Head bounds the read, Claim starts it — orthogonal, so both are honoured.
 	rs, err := arc.Query(ctx, Query{Select: Select{
-		Branch: BranchUniverse, Head: bth.ID(), Claim: em.ID(), Path: step}})
+		Branch: BranchUniverse, Head: bth.ID(), Claim: Anchors(em.ID()), Path: step}})
 	require.NoError(t, err)
 	require.Equal(t, idsOf(em, root), idSet(drain(t, rs)),
 		"the walk starts at em, so bth is in scope but never reached")

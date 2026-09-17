@@ -179,51 +179,79 @@ func closureAnchor(q ranke.Query, scope ranke.Scope) ranke.Id {
 	return nil
 }
 
-// frontierRoot binds the claim a read starts from — the anchor `R-QANCHOR` names, else
-// the closure anchor — returning its parameter name, "" when neither bounds the read.
-func frontierRoot(q ranke.Query, scope ranke.Scope, params map[string]any) string {
-	if q.Select.Claim != nil {
-		params["root"] = q.Select.Claim.String()
-		return "$root"
+// anchorIds renders the anchors as the parameter a membership test reads, each id once
+// (`R-QANCHOR`).
+func anchorIds(anchors []ranke.Id) []string {
+	out := make([]string, 0, len(anchors))
+	seen := map[string]bool{}
+	for _, id := range anchors {
+		if id == nil || seen[id.String()] {
+			continue
+		}
+		seen[id.String()] = true
+		out = append(out, id.String())
+	}
+	return out
+}
+
+// startClause binds n0, where a traversal's first segment starts: pinned by id where
+// Select.Claim anchors one claim, by membership where it anchors a set (`R-QCCLAUSE`),
+// else any claim the closure holds.
+func startClause(q ranke.Query, scope ranke.Scope, params map[string]any) string {
+	switch anchors := q.Select.Claim; {
+	case len(anchors) == 1:
+		params["root"] = anchors[0].String()
+		return "MATCH (n0 {id: $root})" // the anchor itself is the frontier
+	case len(anchors) > 1:
+		params["roots"] = anchorIds(anchors)
+		return "MATCH (n0)\nWHERE n0.id IN $roots"
 	}
 	if anchor := closureAnchor(q, scope); anchor != nil {
 		params["head"] = anchor.String()
-		return "$head"
+		return "MATCH (h {id: $head})-[*0..]->(n0)"
 	}
-	return ""
+	return "MATCH (n0)"
 }
 
-// startClause binds n0, where a traversal's first segment starts: the claim
-// Select.Claim names, else any claim the closure holds.
-func startClause(q ranke.Query, scope ranke.Scope, params map[string]any) string {
-	root := frontierRoot(q, scope, params)
-	switch {
-	case root == "":
-		return "MATCH (n0)"
-	case q.Select.Claim != nil:
-		return "MATCH (n0 {id: " + root + "})" // the anchor itself is the frontier
-	}
-	return "MATCH (h {id: " + root + "})-[*0..]->(n0)"
-}
-
-// lowerCypher routes a query to its Cypher: a Path-less read is the frontier's
-// closure (a scan), anything else follows the Path's steps.
+// lowerCypher routes a query to its Cypher, the two empties of Path apart (`R-QSTEPS`):
+// an ABSENT Path is the frontier's outward closure, an EMPTY one the frontier itself,
+// and a stated one follows its steps.
 func lowerCypher(q ranke.Query, scope ranke.Scope, needPaths bool) (string, map[string]any) {
 	if len(q.Select.Path) == 0 {
-		return scanCypher(q, scope) // no traversal: the frontier's outward closure
+		return scanCypher(q, scope, q.Select.Path == nil)
 	}
 	return traversalCypher(q, scope, needPaths)
 }
 
-// scanCypher lowers a Path-less read: the frontier's outward closure (`R-QSTEPS`),
-// frontierRoot fixing the start so a scan and a walk begin alike (ranke.frontier).
-func scanCypher(q ranke.Query, scope ranke.Scope) (string, map[string]any) {
+// scanCypher lowers a read that takes no step: expand walks the frontier's outward
+// closure, where an empty Path carries no segment and returns the frontier itself
+// (`R-QCCLAUSE`). The start matches ranke.frontier, so a scan and a walk begin alike.
+func scanCypher(q ranke.Query, scope ranke.Scope, expand bool) (string, map[string]any) {
 	params := map[string]any{}
 	match := "MATCH (n)"
-	if root := frontierRoot(q, scope, params); root != "" {
-		match = "MATCH (h {id: " + root + "})-[*0..]->(n)\nWITH DISTINCT n"
-	}
 	var conds []string
+	switch anchors := q.Select.Claim; {
+	case len(anchors) == 1:
+		params["root"] = anchors[0].String()
+		match = "MATCH (n {id: $root})"
+		if expand {
+			match = "MATCH (h {id: $root})-[*0..]->(n)\nWITH DISTINCT n"
+		}
+	case len(anchors) > 1:
+		params["roots"] = anchorIds(anchors)
+		if expand {
+			match = "MATCH (h)-[*0..]->(n)\nWHERE h.id IN $roots\nWITH DISTINCT n"
+		} else {
+			conds = append(conds, "n.id IN $roots")
+		}
+	default:
+		// Unanchored, the frontier is every claim in the closure, so the two empties
+		// of Path lower alike.
+		if anchor := closureAnchor(q, scope); anchor != nil {
+			params["head"] = anchor.String()
+			match = "MATCH (h {id: $head})-[*0..]->(n)\nWITH DISTINCT n"
+		}
+	}
 	if tagBounded(scope) {
 		params["bkey"] = ranke.BranchTagKey(scope.Branch)
 		params["height"] = scope.Height

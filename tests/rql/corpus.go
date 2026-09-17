@@ -59,7 +59,7 @@ func Corpus(m *generator.Manifest, root ranke.Id) []NamedQuery {
 	// sel scans the branch scope; path anchors a traversal at the branch head.
 	sel := func() ranke.Select { return ranke.Select{Branch: Branch} }
 	path := func(steps ...ranke.PathStep) ranke.Select {
-		return ranke.Select{Branch: Branch, Claim: root, Path: steps}
+		return ranke.Select{Branch: Branch, Claim: ranke.Anchors(root), Path: steps}
 	}
 	// scanFrom narrows a branch scan to one claim's closure.
 	scanFrom := func(head ranke.Id) ranke.Select {
@@ -67,11 +67,11 @@ func Corpus(m *generator.Manifest, root ranke.Id) []NamedQuery {
 	}
 	// pathFrom anchors a traversal at a claim carrying the edges the steps follow.
 	pathFrom := func(claim ranke.Id, steps ...ranke.PathStep) ranke.Select {
-		return ranke.Select{Branch: Branch, Claim: claim, Path: steps}
+		return ranke.Select{Branch: Branch, Claim: ranke.Anchors(claim), Path: steps}
 	}
 	// archivePath spans every branch, for endpoints the generator may commit anywhere.
 	archivePath := func(steps ...ranke.PathStep) ranke.Select {
-		return ranke.Select{Branch: ranke.BranchArchive, Claim: m.Head, Path: steps}
+		return ranke.Select{Branch: ranke.BranchArchive, Claim: ranke.Anchors(m.Head), Path: steps}
 	}
 	// unanchored names no start, so the steps match anywhere in the closure.
 	unanchored := func(steps ...ranke.PathStep) ranke.Select {
@@ -103,7 +103,7 @@ func Corpus(m *generator.Manifest, root ranke.Id) []NamedQuery {
 		// lowering that scans branch membership and ignores the root over-returns.
 		{"select/root-mid-branch", ranke.Query{Select: scanFrom(m.DiffChainHead)}},
 		{"select/root-mid-branch-path", ranke.Query{
-			Select: ranke.Select{Branch: Branch, Claim: m.DiffChainHead,
+			Select: ranke.Select{Branch: Branch, Claim: ranke.Anchors(m.DiffChainHead),
 				Path: []ranke.PathStep{{Edges: []string{"contribution/*"}, Max: 2}}},
 		}},
 		{"select/root-mid-archive", ranke.Query{
@@ -112,10 +112,32 @@ func Corpus(m *generator.Manifest, root ranke.Id) []NamedQuery {
 		// A path-less anchor reads the anchor's closure (`R-QANCHOR`, `R-QSTEPS`). The
 		// twin spells the same read with its zero step, holding both shapes to one answer.
 		{"select/anchored-scan", ranke.Query{
-			Select: ranke.Select{Branch: Branch, Claim: m.DiffChainHead},
+			Select: ranke.Select{Branch: Branch, Claim: ranke.Anchors(m.DiffChainHead)},
 		}},
 		{"select/anchored-scan-path", ranke.Query{
 			Select: pathFrom(m.DiffChainHead, ranke.PathStep{Min: ranke.Hops(0)}),
+		}},
+		// A set anchor with an empty path returns exactly the claims it names and
+		// nothing they cite — the read a client makes to resolve `height` before
+		// signing (`R-QANCHOR`, `R-QSTEPS`).
+		// $archive spans every branch, since the generator commits an entity wherever
+		// it likes and a set anchor must name claims the scope holds.
+		{"select/anchor-set-no-step", ranke.Query{
+			Select: ranke.Select{Branch: ranke.BranchArchive,
+				Claim: ranke.Anchors(m.Entities[0], m.Entities[1]), Path: []ranke.PathStep{}},
+		}},
+		// The same anchors with a step: every frontier member expands, so a lowering
+		// that pins only the first under-returns.
+		{"select/anchor-set-step", ranke.Query{
+			Select: ranke.Select{Branch: ranke.BranchArchive,
+				Claim: ranke.Anchors(m.Entities[0], m.Entities[1]),
+				Path:  []ranke.PathStep{{Min: ranke.Hops(0), Max: 1}}},
+		}},
+		// One anchor with an empty path is the claim itself, where the same anchor
+		// path-less is its whole closure — the two empties of `path` (`R-QSTEPS`).
+		{"select/anchor-no-step", ranke.Query{
+			Select: ranke.Select{Branch: Branch,
+				Claim: ranke.Anchors(m.DiffChainHead), Path: []ranke.PathStep{}},
 		}},
 
 		// ── traversal: unanchored, matched wherever it occurs in the closure ──
