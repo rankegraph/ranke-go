@@ -320,6 +320,11 @@ func checkClaim(cfg ClaimBuilder, edges []*edge) error {
 			return err
 		}
 	}
+	// An UNSET CreatedAt takes the clock (normalizeCreatedAt); the epoch is a value
+	// stated, and it states the one instant that means "never set" (`V-MONO`).
+	if !cfg.CreatedAt.IsZero() && NamesNoInstant(cfg.CreatedAt) {
+		return WithDetail(ErrCreatedAtZero, FormatTimestamp(cfg.CreatedAt))
+	}
 	return CheckDeletable(cfg.TypeClass, cfg.TypeSub, cfg.Fields)
 }
 

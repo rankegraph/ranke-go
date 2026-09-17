@@ -18,6 +18,17 @@ var timeFields = []string{FieldDeleteBy, FieldPubkeyValidFrom, FieldPubkeyExpire
 // — the one spelling a time comparison takes (`R-QTIMEOP`).
 func FormatTimestamp(t time.Time) string { return t.UTC().Format(iso8601Nano) }
 
+// epochInstant is the other zero a timestamp arrives as: a field counted in seconds
+// from 1970 and never set reads back as this, the way an unset Go time reads as year 1.
+var epochInstant = time.Unix(0, 0).UTC()
+
+// NamesNoInstant reports whether t is a timestamp that states nothing: Go's zero value,
+// or the Unix epoch an unset counter reads as. `V-MONO` requires every claim to carry
+// created_at, and a claim dated at either carries a default rather than a time.
+func NamesNoInstant(t time.Time) bool {
+	return t.IsZero() || t.UTC().Equal(epochInstant)
+}
+
 // checkTimestampFields parses every timestamp field present in fields. Absence is no
 // violation — all three are optional — so only a value that is there and will not
 // parse is refused.
